@@ -788,7 +788,7 @@ int blspec_scan_devicename(struct bootentries *bootentries, const char *devname)
 	return blspec_scan_device(bootentries, dev);
 }
 
-static int blspec_bootentry_provider(struct bootentries *bootentries,
+static int blspec_bootentry_generate(struct bootentries *bootentries,
 				     const char *name)
 {
 	struct stat s;
@@ -822,8 +822,12 @@ out:
 	return found;
 }
 
+static struct bootentry_provider blspec_bootentry_provider = {
+	.generate = blspec_bootentry_generate,
+};
+
 static int blspec_init(void)
 {
-	return bootentry_register_provider(blspec_bootentry_provider);
+	return bootentry_register_provider(&blspec_bootentry_provider);
 }
 device_initcall(blspec_init);
