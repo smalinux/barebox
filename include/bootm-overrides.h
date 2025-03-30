@@ -2,10 +2,17 @@
 #ifndef __BOOTM_OVERRIDES_H
 #define __BOOTM_OVERRIDES_H
 
+enum bootm_override {
+	BOOTM_OVERRIDE_NONE,
+	BOOTM_OVERRIDE_FALSE,
+	BOOTM_OVERRIDE_TRUE,
+};
+
 struct bootm_overrides {
 	const char *os_file;
 	const char *oftree_file;
 	const char *initrd_file;
+	enum bootm_override appendroot;
 };
 
 #ifdef CONFIG_BOOT_OVERRIDE

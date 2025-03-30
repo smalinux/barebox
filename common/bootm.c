@@ -162,6 +162,26 @@ static bool bootm_get_override(char **oldpath, const char *newpath)
 	return true;
 }
 
+static bool bootm_get_override_bool(bool *oldval, enum bootm_override new)
+{
+	if (!IS_ENABLED(CONFIG_BOOT_OVERRIDE))
+		return false;
+	if (bootm_signed_images_are_forced())
+		return false;
+	if (!oldval)
+		return false;
+
+	if (new == BOOTM_OVERRIDE_FALSE) {
+		*oldval = false;
+		return true;
+	} else if (new == BOOTM_OVERRIDE_TRUE) {
+		*oldval = true;
+		return true;
+	}
+
+	return false;
+}
+
 /*
  * bootm_load_os() - load OS to RAM
  *
@@ -832,6 +852,7 @@ int bootm_boot(struct bootm_data *bootm_data)
 		goto err_out;
 	}
 
+	bootm_get_override_bool(&bootm_data->appendroot, bootm_overrides.appendroot);
 	if (bootm_data->appendroot) {
 		char *rootarg;
 
