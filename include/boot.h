@@ -7,6 +7,7 @@
 #include <environment.h>
 #include <bootm-overrides.h>
 #include <bootargs.h>
+#include <xfuncs.h>
 
 struct bootentries {
 	struct list_head entries;
@@ -42,11 +43,22 @@ void boot_set_default(const char *boot_default);
 void boot_set_watchdog_timeout(unsigned int timeout);
 struct watchdog *boot_get_enabled_watchdog(void);
 struct bootentries *bootentries_alloc(void);
+void bootentries_merge(struct bootentries *dst, struct bootentries *src);
 void bootentries_free(struct bootentries *bootentries);
 int bootentry_create_from_name(struct bootentries *bootentries,
 				      const char *name);
 void bootsources_menu(struct bootentries *bootentries, unsigned default_entry, int timeout);
 void bootsources_list(struct bootentries *bootentries);
 int boot_entry(struct bootentry *be, int verbose, int dryrun);
+
+static inline struct bootentries *bootentries_alloc_list(void)
+{
+	struct bootentries *bootentries;
+
+	bootentries = xzalloc(sizeof(*bootentries));
+	INIT_LIST_HEAD(&bootentries->entries);
+
+	return bootentries;
+}
 
 #endif /* __BOOT_H */

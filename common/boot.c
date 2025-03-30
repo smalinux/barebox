@@ -30,8 +30,7 @@ struct bootentries *bootentries_alloc(void)
 {
 	struct bootentries *bootentries;
 
-	bootentries = xzalloc(sizeof(*bootentries));
-	INIT_LIST_HEAD(&bootentries->entries);
+	bootentries = bootentries_alloc_list();
 
 	if (IS_ENABLED(CONFIG_MENU)) {
 		bootentries->menu = menu_alloc();
@@ -39,6 +38,12 @@ struct bootentries *bootentries_alloc(void)
 	}
 
 	return bootentries;
+}
+
+void bootentries_merge(struct bootentries *dst, struct bootentries *src)
+{
+	list_splice_tail_init(&src->entries, &dst->entries);
+	bootentries_free(src);
 }
 
 void bootentries_free(struct bootentries *bootentries)
