@@ -92,7 +92,7 @@ config CMD_DEVLOOKUP
 	help
 	  Look up device behind device file and its parameters
 
-	  devlookup [-v VAR] /dev/DEVICE [parameter]
+	  devlookup [-v VAR] [-ka] /dev/DEVICE [parameter]
 
 	  Detects the device behind a device file and outputs it,
 	  unless a second argument is given. In that case the device
@@ -210,6 +210,15 @@ config CMD_MEMINFO
 	  system bytes     =     282616
 	  in use bytes     =     274752
 
+config CMD_CHECKLEAK
+	tristate
+	prompt "checkleak"
+	depends on DEBUG_MEMLEAK
+	default y
+	help
+	  List memory leaks encountered since the last time
+	  the command ran.
+
 config CMD_ARM_MMUINFO
 	bool "mmuinfo command"
 	depends on CPU_V7 || CPU_V8
@@ -286,6 +295,18 @@ config CMD_LSPCI
 	help
 	  The lspci command allows to list all PCI devices.
 
+config CMD_VARINFO
+	tristate
+	prompt "varinfo"
+	help
+	  Show information about variables
+
+	  varinfo VAR
+
+	  Shows information about the variable in its argument. This doesn't
+	  provide more information that what's available with devinfo, but
+	  it can be useful for devices with many parameters (e.g. global).
+
 config CMD_VERSION
 	tristate
 	default y
@@ -295,6 +316,17 @@ config CMD_VERSION
 	  Print barebox version. Example:
 
 	  barebox 2014.05.0-00142-gb289373 #177 Mon May 12 20:35:55 CEST 2014
+
+config CMD_BFETCH
+	tristate
+	depends on BANNER
+	select STRUCTIO
+	imply CMD_UPTIME
+	imply CMD_ARM_CPUINFO if ARM
+	imply CMD_DEVINFO
+	prompt "bfetch"
+	help
+	  Print system information from barebox point of view. Fancily.
 
 config CMD_MMC
 	tristate
@@ -678,7 +710,7 @@ config CMD_FINDMNT
 	help
 	  Find a file system
 
-	  Usage: findmnt [ DEVICE | -T FILE ]
+	  Usage: findmnt [ DEVICE | -T FILE ] [-v VARIABLE]
 
 	  findmnt will list all mounted filesystems or search
 	  for a filesystem when given the mountpoint or the
@@ -686,6 +718,7 @@ config CMD_FINDMNT
 
 	  Options:
 		-T		mount target file path
+		-v VARIABLE	export target to specified VARIABLE
 
 config CMD_PARTED
 	tristate
@@ -707,6 +740,20 @@ config CMD_PARTED
 	         mkpart <name> <fstype> <start> <end>    create a new partition
 	         unit <unit>     change display/input units
 	         refresh         refresh a partition table
+
+config CMD_DMSETUP
+	tristate
+	depends on DM_BLK
+	prompt "dmsetup"
+	help
+	  dmsetup - low level interface to the device mapper
+
+	  Compose virtual block devices from a table of mappings from
+	  logical block addresses to various data sources, such as
+	  linear ranges from other existing devices.
+
+	  commands:
+	        create <name> <table-file>
 
 config CMD_UBI
 	tristate
@@ -751,12 +798,40 @@ config CMD_UMOUNT
 
 	  Unmount a filesystem mounted on a specific MOINTPOINT
 
+config CMD_VERITYSETUP
+	tristate
+	depends on DM_BLK_VERITY
+	prompt "veritysetup"
+	help
+	  veritysetup - manage dm-verity volumes
+
+	  commands:
+	        open <data-dev> <name> <hash-dev> <root-hash>
+
 # end Partition commands
 endmenu
 
 
 
 menu "Environment"
+
+config CMD_CREATENV
+	tristate
+	depends on PARTITION_DISK_EFI
+	select PARTITION_MANIPULATION
+	prompt "createnv"
+	help
+	  createnv - Create a barebox environment partition
+
+	  Usage: createnv [-sf] [device]
+
+	  Create a barebox environment partition.
+	  This creates a barebox environment partition and eventually
+	  a GPT partition table when it does not exist.
+
+	  Options:
+		-s <size>       specify partition size (default 1MiB)
+		-f      force. Do not ask
 
 config CMD_NV
 	depends on NVVAR
@@ -860,8 +935,7 @@ config CMD_SAVEENV
 
 	  ENVFS is usually a block in flash but can be any other file. If
 	  omitted, DIRECTORY defaults to /env and ENVFS defaults to
-	  /dev/env0. Note that envfs can only handle files, directories are being
-	  skipped silently.
+	  /dev/env0.
 
 config CMD_SETENV
 	tristate
@@ -921,11 +995,13 @@ config CMD_CP
 	help
 	  Copy files
 
-	  Usage: cp [-v] SRC DEST
+	  Usage: cp [-rnv] SRC DEST
 
 	  Copy file from SRC to DEST.
 
 	  Options:
+		  -r    recursive
+		  -n    do not overwrite an existing file
 		  -v	verbose
 
 config CMD_CMP
@@ -1020,6 +1096,15 @@ config CMD_LS
 		  -l	long format
 		  -C	column format (opposite of long format)
 		  -R	list subdirectories recursively
+
+config CMD_TREE
+	tristate
+	default y
+	prompt "tree"
+	help
+	  list contents of directories in a tree-like format.
+
+	  Usage: tree [FILEDIR...]
 
 config CMD_STAT
 	tristate
@@ -1140,6 +1225,21 @@ config CMD_SHA256SUM
 	  Usage: sha256sum FILE|AREA
 
 	  Calculate a SHA256 digest over a FILE or a memory area.
+
+config CMD_BASE64
+	tristate
+	select BASE64
+	prompt "base64"
+	help
+	  base64 - base64 decode data
+
+	  Usage: base64 [-u] -d -o OUT IN
+
+	  Decode normal and URL base64 data
+
+	    -d		decode to base64 instead of encoding
+	    -o OUT	output file name
+	    -u		Use base64 URL character set
 
 config CMD_SHA384SUM
 	tristate
@@ -1479,23 +1579,6 @@ config CMD_EDIT
 
 	  Use cursor keys, Ctrl-C to exit and Ctrl-D to exit-with-save.
 
-config CMD_LOGIN
-	tristate
-	select PASSWORD
-	depends on !CONSOLE_NONE
-	prompt "login"
-	help
-	  Ask for a password
-
-	  Usage: login [-t TIMEOUT] COMMAND
-
-	  Asks for a password from the console before script execution continues.
-	  The password can be set with the 'passwd' command. Instead of specifying
-	  a TIMEOUT the magic variable 'global.login.timeout' could be set.
-
-	  Options:
-		  -t TIMEOUT	Execute COMMAND if no login withing TIMEOUT seconds
-
 config CMD_MENU
 	tristate
 	depends on MENU
@@ -1589,37 +1672,6 @@ config CMD_MENUTREE
 	  Options:
 		  -m DIR	directory where the menu starts (Default: /env/menu)
 
-config CMD_PASSWD
-	tristate
-	depends on CMD_LOGIN
-	prompt "passwd"
-	help
-	  Set password
-
-	  Interactively asks for a password. The digest of this password will be
-	  stored in /env/etc/passwd. This is then used by the 'login' command.
-
-	  Passwords can be generated on the host machine using barebox sandbox.
-
-	  Entering an empty string will disable the password function.
-
-if CMD_LOGIN || CMD_PASSWD
-
-choice
-	prompt "passwd mode"
-
-config PASSWD_MODE_HIDE
-	bool "Hide"
-
-config PASSWD_MODE_STAR
-	bool "Star"
-
-config PASSWD_MODE_CLEAR
-	bool "Clear"
-
-endchoice
-
-endif
 config CMD_SPLASH
 	bool
 	select IMAGE_RENDERER
@@ -1902,6 +1954,21 @@ config CMD_DETECT
 		  -l	list detectable devices
 		  -e	bail out if one device fails to detect
 		  -a	detect all devices
+
+config CMD_TRUNCATE
+	tristate
+	prompt "truncate"
+	help
+
+	truncate [-c] -s [+]SIZE FILE...
+
+	truncate truncates files to a given size. If a file does
+	not exist, it is created unless told otherwise.
+	Options:
+	-c		Do not create files
+	-s [+]SIZE	truncate file to SIZE, or increase by +SIZE
+
+	This command is mainly useful for VFS development.
 
 config CMD_SYNC
 	tristate
@@ -2252,7 +2319,118 @@ config CMD_HAB
 # end Hardware manipulation commands
 endmenu
 
+menu "Security"
 
+config CMD_SCONFIG
+	depends on SECURITY_POLICY
+	select SECURITY_POLICY_NAMES
+	default y
+	bool "sconfig"
+	help
+	  Interact with security policies. By default, this only
+	  allows read-access and not selection of new policies
+
+config CMD_SCONFIG_MODIFY
+	depends on CMD_SCONFIG
+	select HAS_INSECURE_DEFAULTS
+	bool "support policy modification"
+	help
+	  Say y here if you are developing and want to extend the sconfig
+	  command to support selecting a different active policy and
+	  modifying it.
+
+	  This is an very priviliged operation and the recommendation is
+	  to hardcode policy transitions in board code and not from scripts.
+
+	  Say n here if unsure.
+
+config CMD_AVB_PVALUE
+	depends on OPTEE_AVB_PERSISTENT_VALUES
+	tristate
+	prompt "avb_pvalue"
+	help
+	  The avb_pvalue command provides access to the Android Verified Boot (AVB)
+	  persistent value store.
+
+	  AVB 2.0 spec. revision 1.1 introduces support for named persistent values
+	  that must be tamper evident and allows AVB to store arbitrary key-value
+	  pairs.
+
+config CMD_BLOBGEN
+	bool
+	select BLOBGEN
+	prompt "blobgen"
+	help
+	  Provides the "blobgen" command. This command encrypts and decrypts
+	  plaintext to/from blobs. This is done with hardware crypto engines,
+	  so this command is only useful when you also enable a blobgen capable
+	  driver.
+
+config CMD_KEYSTORE
+	depends on CRYPTO_KEYSTORE
+	bool
+	prompt "keystore"
+	help
+	  keystore provides access to the barebox keystore.
+
+config CMD_KEYS
+	depends on CRYPTO_BUILTIN_KEYS
+	bool
+	prompt "keys"
+	help
+	  The keys command provides information about builtin public keys
+
+config CMD_LOGIN
+	tristate
+	select PASSWORD
+	depends on !CONSOLE_NONE
+	prompt "login"
+	help
+	  Ask for a password
+
+	  Usage: login [-t TIMEOUT] COMMAND
+
+	  Asks for a password from the console before script execution continues.
+	  The password can be set with the 'passwd' command. Instead of specifying
+	  a TIMEOUT the magic variable 'global.login.timeout' could be set.
+
+	  Options:
+		  -t TIMEOUT	Execute COMMAND if no login withing TIMEOUT seconds
+
+config CMD_PASSWD
+	tristate
+	depends on CMD_LOGIN
+	prompt "passwd"
+	help
+	  Set password
+
+	  Interactively asks for a password. The digest of this password will be
+	  stored in /env/etc/passwd. This is then used by the 'login' command.
+
+	  Passwords can be generated on the host machine using barebox sandbox.
+
+	  Entering an empty string will disable the password function.
+
+if CMD_LOGIN || CMD_PASSWD
+
+choice
+	prompt "passwd mode"
+
+config PASSWD_MODE_HIDE
+	bool "Hide"
+
+config PASSWD_MODE_STAR
+	bool "Star"
+
+config PASSWD_MODE_CLEAR
+	bool "Clear"
+
+endchoice
+
+endif
+
+# end Security commands
+endmenu
 
 menu "Miscellaneous"
 
@@ -2278,16 +2456,6 @@ config CMD_BAREBOX_UPDATE
 		  -y		autom. use 'yes' when asking confirmations
 		  -f LEVEL	set force level
 
-config CMD_BLOBGEN
-	bool
-	select BLOBGEN
-	prompt "blobgen"
-	help
-	  Provides the "blobgen" command. This command encrypts and decrypts
-	  plaintext to/from blobs. This is done with hardware crypto engines,
-	  so this command is only useful when you also enable a blobgen capable
-	  driver.
-
 config CMD_FIRMWARELOAD
 	bool
 	select FIRMWARE
@@ -2304,13 +2472,6 @@ config CMD_KALLSYMS
 	  query kallsyms table
 
 	  Usage: kallsyns [SYMBOL | ADDRESS]
-
-config CMD_KEYSTORE
-	depends on CRYPTO_KEYSTORE
-	bool
-	prompt "keystore"
-	help
-	  keystore provides access to the barebox keystore.
 
 config CMD_LINUX_EXEC
 	bool "linux exec"
@@ -2466,13 +2627,13 @@ config CMD_OFTREE
 	help
 	  oftree - handle device trees
 
-	  Usage: oftree [-lspf] [DTB]
+	  Usage: oftree [-lsSp]
 
 	  Options:
-		  -l		Load DTB to internal device tree
-		  -s		save internal device tree to DTB
+		  -l <DTB>	Load <DTB> to internal device tree
+		  -s <DTB>	save internal device tree with fixups to <DTB>
+		  -S <DTB>	save internal device tree without fixups to <DTB>
 		  -p		probe devices from stored device tree
-		  -f		free stored device tree
 
 config CMD_TIME
 	bool "time"
@@ -2507,6 +2668,18 @@ config CMD_STATE
 	tristate
 	depends on STATE
 	prompt "state"
+
+config CMD_TLV
+	tristate
+	depends on TLV
+	prompt "tlv"
+	help
+	  tlv - handle barebox TLV
+
+	  Usage: tlv [-f] FILE
+
+	  The TLV command does the equivalent of having a "barebox,tlv"
+	  compatible node point at the file. It's meant as a debugging aid.
 
 config CMD_DHRYSTONE
 	bool

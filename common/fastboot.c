@@ -42,6 +42,7 @@
 #include <linux/types.h>
 #include <linux/stat.h>
 #include <linux/mtd/mtd.h>
+#include <security/config.h>
 #include <fastboot.h>
 #include <system-partitions.h>
 
@@ -80,15 +81,10 @@ static struct fb_variable *fb_addvar(struct fastboot *fb, struct list_head *list
 	return var;
 }
 
-static int fastboot_add_partition_variables(struct fastboot *fb, struct list_head *list,
-		struct file_list_entry *fentry)
+static loff_t fb_file_getsize(struct file_list_entry *fentry)
 {
 	struct stat s;
-	size_t size = 0;
-	int fd, ret;
-	struct mtd_info_user mtdinfo;
-	char *type = NULL;
-	struct fb_variable *var;
+	int ret;
 
 	ret = stat(fentry->filename, &s);
 	if (ret) {
@@ -96,7 +92,34 @@ static int fastboot_add_partition_variables(struct fastboot *fb, struct list_hea
 		ret = stat(fentry->filename, &s);
 	}
 
-	if (ret) {
+	return ret ? ret : s.st_size;
+}
+
+static int fb_file_available(struct file_list_entry *fentry)
+{
+	loff_t size;
+
+	size = fb_file_getsize(fentry);
+	if (size >= 0)
+		return 1;
+
+	if (fentry->flags & FILE_LIST_FLAG_CREATE)
+		return 0;
+
+	return size;
+}
+
+static int fastboot_add_partition_variables(struct fastboot *fb, struct list_head *list,
+		struct file_list_entry *fentry)
+{
+	loff_t size;
+	int fd, ret;
+	struct mtd_info_user mtdinfo;
+	char *type = NULL;
+	struct fb_variable *var;
+
+	size = fb_file_getsize(fentry);
+	if (size < 0) {
 		if (fentry->flags & FILE_LIST_FLAG_OPTIONAL) {
 			pr_info("skipping unavailable optional partition %s for fastboot gadget\n",
 				fentry->filename);
@@ -111,6 +134,7 @@ static int fastboot_add_partition_variables(struct fastboot *fb, struct list_hea
 			goto out;
 		}
 
+		ret = size;
 		goto out;
 	}
 
@@ -120,7 +144,6 @@ static int fastboot_add_partition_variables(struct fastboot *fb, struct list_hea
 		goto out;
 	}
 
-	size = s.st_size;
 
 	ret = ioctl(fd, MEMGETINFO, &mtdinfo);
 
@@ -156,6 +179,10 @@ out:
 	fb_setvar(var, "%08zx", size);
 	var = fb_addvar(fb, list, "partition-type:%s", fentry->name);
 	fb_setvar(var, "%s", type);
+	var = fb_addvar(fb, list, "is-logical:%s", fentry->name);
+	fb_setvar(var, "%s", "no");
+	var = fb_addvar(fb, list, "has-slot:%s", fentry->name);
+	fb_setvar(var, "%s", "no");
 
 	return ret;
 }
@@ -284,55 +311,78 @@ int fastboot_tx_print(struct fastboot *fb, enum fastboot_msg_type type,
 static void cb_reboot(struct fastboot *fb, const char *cmd)
 {
 	fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, "");
-	restart_machine();
+	restart_machine(0);
+}
+
+static bool fastboot_tx_print_var(struct fastboot *fb, struct list_head *vars,
+				  const char *varname)
+{
+	struct fb_variable *var;
+
+	list_for_each_entry(var, vars, list) {
+		if (!varname) {
+			fastboot_tx_print(fb, FASTBOOT_MSG_INFO, "%s: %s",
+					  var->name, var->value);
+		} else if (!strcmp(varname, var->name)) {
+			fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, "%s",
+					  var->value);
+			return true;
+		}
+	}
+
+	return false;
 }
 
 static void cb_getvar(struct fastboot *fb, const char *cmd)
 {
-	struct fb_variable *var;
 	LIST_HEAD(partition_list);
 	struct file_list_entry *fentry;
+	const char *partition;
+	bool all;
+
+	pr_debug("getvar: \"%s\"\n", cmd);
+
+	partition = strchr(cmd, ':');
+	if (partition)
+		partition++;
+
+	all = !strcmp(cmd, "all");
+	if (all)
+		cmd = NULL;
+
+	if (fastboot_tx_print_var(fb, &fb->variables, cmd))
+		goto out;
+
+	if (!all && !partition) {
+		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, "no such variable: %s", cmd);
+		goto out;
+	}
 
 	file_list_for_each_entry(fb->files, fentry) {
 		int ret;
 
+		if (!all && strcmp(partition, fentry->name))
+			continue;
+
 		ret = fastboot_add_partition_variables(fb, &partition_list, fentry);
 		if (ret) {
-			pr_warn("Failed to add partition variables: %pe", ERR_PTR(ret));
-			return;
+			char *msg = xasprintf("%s: Failed to add '%s' partition variables: %pe",
+					      fentry->name, fentry->filename, ERR_PTR(ret));
+			pr_warn("%s\n", msg);
+			fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, "%s", msg);
+			free(msg);
+			goto out;
 		}
 	}
 
-	pr_debug("getvar: \"%s\"\n", cmd);
-
-	if (!strcmp(cmd, "all")) {
-		list_for_each_entry(var, &fb->variables, list)
-			fastboot_tx_print(fb, FASTBOOT_MSG_INFO, "%s: %s",
-					  var->name, var->value);
-
-		list_for_each_entry(var, &partition_list, list)
-			fastboot_tx_print(fb, FASTBOOT_MSG_INFO, "%s: %s",
-					  var->name, var->value);
-
-		fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, "");
+	if (fastboot_tx_print_var(fb, &partition_list, cmd))
 		goto out;
-	}
 
-	list_for_each_entry(var, &fb->variables, list) {
-		if (!strcmp(cmd, var->name)) {
-			fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, var->value);
-			goto out;
-		}
-	}
+	if (all)
+		fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, "");
+	else
+		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, "no such variable: %s", cmd);
 
-	list_for_each_entry(var, &partition_list, list) {
-		if (!strcmp(cmd, var->name)) {
-			fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, var->value);
-			goto out;
-		}
-	}
-
-	fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, "");
 out:
 	fastboot_free_variables(&partition_list);
 }
@@ -358,7 +408,7 @@ void fastboot_download_finished(struct fastboot *fb)
 
 	printf("\n");
 
-	fastboot_tx_print(fb, FASTBOOT_MSG_INFO, "Downloading %d bytes finished",
+	fastboot_tx_print(fb, FASTBOOT_MSG_INFO, "Downloading %zu bytes finished",
 			  fb->download_bytes);
 
 	fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, "");
@@ -381,7 +431,7 @@ static void cb_download(struct fastboot *fb, const char *cmd)
 	fb->download_size = simple_strtoul(cmd, NULL, 16);
 	fb->download_bytes = 0;
 
-	fastboot_tx_print(fb, FASTBOOT_MSG_INFO, "Downloading %d bytes...",
+	fastboot_tx_print(fb, FASTBOOT_MSG_INFO, "Downloading %zu bytes...",
 			  fb->download_size);
 
 	init_progression_bar(fb->download_size);
@@ -406,7 +456,7 @@ static void cb_download(struct fastboot *fb, const char *cmd)
 
 void fastboot_start_download_generic(struct fastboot *fb)
 {
-	fastboot_tx_print(fb, FASTBOOT_MSG_DATA, "%08x", fb->download_size);
+	fastboot_tx_print(fb, FASTBOOT_MSG_DATA, "%08zx", fb->download_size);
 }
 
 static void __maybe_unused cb_boot(struct fastboot *fb, const char *opt)
@@ -424,8 +474,8 @@ static void __maybe_unused cb_boot(struct fastboot *fb, const char *opt)
 	ret = bootm_boot(&data);
 
 	if (ret)
-		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, "Booting failed: %s",
-				   strerror(-ret));
+		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, "Booting failed: %pe",
+				   ERR_PTR(ret));
 	else
 		fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, "");
 }
@@ -656,11 +706,22 @@ static void cb_flash(struct fastboot *fb, const char *cmd)
 		goto out;
 	}
 
-	/* Check if board-code registered a vendor-specific handler */
+	/* Check if board-code registered a vendor-specific handler
+	 * We intentionally do this before the fb_file_available check
+	 * to afford board core more flexibility.
+	 */
 	if (fb->cmd_flash) {
 		ret = fb->cmd_flash(fb, fentry, fb->tempname, fb->download_size);
 		if (ret != FASTBOOT_CMD_FALLTHROUGH)
 			goto out;
+	}
+
+	ret = fb_file_available(fentry);
+	if (ret < 0) {
+		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL,
+				  "file %s doesn't exist", fentry->filename);
+		ret = -ENOENT;
+		goto out;
 	}
 
 	filename = fentry->filename;
@@ -676,8 +737,8 @@ static void cb_flash(struct fastboot *fb, const char *cmd)
 		ret = fastboot_handle_sparse(fb, fentry);
 		if (ret)
 			fastboot_tx_print(fb, FASTBOOT_MSG_FAIL,
-					  "writing sparse image: %s",
-					  strerror(-ret));
+					  "writing sparse image: %pe",
+					  ERR_PTR(ret));
 
 		goto out;
 	}
@@ -694,8 +755,8 @@ static void cb_flash(struct fastboot *fb, const char *cmd)
 		ret = do_ubiformat(fb, mtd, fb->tempname, fb->download_size);
 		if (ret) {
 			fastboot_tx_print(fb, FASTBOOT_MSG_FAIL,
-					  "write partition: %s",
-					  strerror(-ret));
+					  "write partition: %pe",
+					  ERR_PTR(ret));
 			goto out;
 		}
 
@@ -733,7 +794,7 @@ static void cb_flash(struct fastboot *fb, const char *cmd)
 
 		if (ret)
 			fastboot_tx_print(fb, FASTBOOT_MSG_FAIL,
-				  "update barebox: %s", strerror(-ret));
+				  "update barebox: %pe", ERR_PTR(ret));
 
 		free(buf);
 
@@ -741,10 +802,10 @@ static void cb_flash(struct fastboot *fb, const char *cmd)
 	}
 
 copy:
-	ret = copy_file(fb->tempname, filename, 1);
+	ret = copy_file(fb->tempname, filename, COPY_FILE_VERBOSE);
 	if (ret)
 		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL,
-				  "write partition: %s", strerror(-ret));
+				  "write partition: %pe", ERR_PTR(ret));
 
 out:
 	if (!ret)
@@ -775,9 +836,16 @@ static void cb_erase(struct fastboot *fb, const char *cmd)
 		return;
 	}
 
+	ret = fb_file_available(fentry);
+	if (ret < 0) {
+		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL,
+				  "file %s doesn't exist", fentry->filename);
+		return;
+	}
+
 	fd = open(filename, O_RDWR);
 	if (fd < 0)
-		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, strerror(-fd));
+		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, "%m");
 
 	ret = erase(fd, ERASE_SIZE_ALL, 0, ERASE_TO_CLEAR);
 
@@ -785,8 +853,8 @@ static void cb_erase(struct fastboot *fb, const char *cmd)
 
 	if (ret)
 		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL,
-				  "cannot erase partition %s: %s",
-				  filename, strerror(-ret));
+				  "cannot erase partition %s: %pe",
+				  filename, ERR_PTR(ret));
 	else
 		fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, "");
 }
@@ -835,7 +903,7 @@ static void cb_oem_getenv(struct fastboot *fb, const char *cmd)
 
 	value = getenv(cmd);
 
-	fastboot_tx_print(fb, FASTBOOT_MSG_INFO, value ? value : "");
+	fastboot_tx_print(fb, FASTBOOT_MSG_INFO, "%s", value ?: "");
 	fastboot_tx_print(fb, FASTBOOT_MSG_OKAY, "");
 }
 
@@ -862,7 +930,7 @@ out:
 	free(var);
 
 	if (ret)
-		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, strerror(-ret));
+		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, "%pe", ERR_PTR(ret));
 }
 
 static void cb_oem_exec(struct fastboot *fb, const char *cmd)
@@ -877,7 +945,7 @@ static void cb_oem_exec(struct fastboot *fb, const char *cmd)
 
 	ret = run_command(cmd);
 	if (ret < 0)
-		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, strerror(-ret));
+		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, "%pe", ERR_PTR(ret));
 	else if (ret > 0)
 		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, "");
 	else
@@ -900,6 +968,11 @@ static const struct cmd_dispatch_info cmd_oem_dispatch_info[] = {
 static void __maybe_unused cb_oem(struct fastboot *fb, const char *cmd)
 {
 	pr_debug("%s: \"%s\"\n", __func__, cmd);
+
+	if (!IS_ALLOWED(SCONFIG_FASTBOOT_CMD_OEM)) {
+		fastboot_tx_print(fb, FASTBOOT_MSG_FAIL, "OEM commands not allowed");
+		return;
+	}
 
 	fb_run_command(fb, cmd, cmd_oem_dispatch_info, ARRAY_SIZE(cmd_oem_dispatch_info));
 }

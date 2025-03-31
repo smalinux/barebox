@@ -25,6 +25,8 @@
 
 static LIST_HEAD(mtd_register_hooks);
 
+DEFINE_DEV_CLASS(mtd_class, "mtd");
+
 /**
  * mtd_buf_all_ff - check if buffer contains only 0xff
  * @buf: buffer to check
@@ -434,6 +436,8 @@ int mtd_erase(struct mtd_info *mtd, struct erase_info *instr)
 {
 	if (instr->addr >= mtd->size || instr->len > mtd->size - instr->addr)
 		return -EINVAL;
+	if (!IS_ENABLED(CONFIG_MTD_WRITE))
+		return -ENOSYS;
 	if (!(mtd->flags & MTD_WRITEABLE))
 		return -EROFS;
 	instr->fail_addr = MTD_FAIL_ADDR_UNKNOWN;
@@ -671,7 +675,7 @@ int add_mtd_device(struct mtd_info *mtd, const char *devname, int device_id)
 
 	if (!devname)
 		devname = "mtd";
-	dev_set_name(&mtd->dev, devname);
+	dev_set_name(&mtd->dev, "%s", devname);
 	mtd->dev.id = device_id;
 
 	if (IS_ENABLED(CONFIG_MTD_UBI))
@@ -680,6 +684,8 @@ int add_mtd_device(struct mtd_info *mtd, const char *devname, int device_id)
 	ret = register_device(&mtd->dev);
 	if (ret)
 		return ret;
+
+	class_add_device(&mtd_class, &mtd->dev);
 
 	mtd->cdev.ops = &mtd_ops;
 	mtd->cdev.size = mtd->size;

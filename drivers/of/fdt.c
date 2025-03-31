@@ -12,6 +12,7 @@
 #include <malloc.h>
 #include <init.h>
 #include <memory.h>
+#include <fuzz.h>
 #include <linux/sizes.h>
 #include <linux/ctype.h>
 #include <linux/log2.h>
@@ -32,9 +33,13 @@ static inline bool __dt_ptr_ok(const struct fdt_header *fdt, const void *p,
 }
 #define dt_ptr_ok(fdt, p) __dt_ptr_ok(fdt, p, sizeof(*(p)), __alignof__(*(p)))
 
-static inline uint32_t dt_struct_advance(struct fdt_header *f, uint32_t dt, uint32_t size)
+static inline uint32_t dt_struct_advance(struct fdt_header *f, uint32_t dt, uint32_t size,
+					 uint32_t increment)
 {
 	if (check_add_overflow(dt, size, &dt))
+		return 0;
+
+	if (check_add_overflow(dt, increment, &dt))
 		return 0;
 
 	dt = ALIGN(dt, 4);
@@ -227,6 +232,13 @@ static struct device_node *__of_unflatten_dtb(const void *infdt, int size,
 				goto err;
 			}
 
+			dt_struct = dt_struct_advance(&f, dt_struct,
+					sizeof(struct fdt_node_header) + 1, len);
+			if (!dt_struct) {
+				ret = -ESPIPE;
+				goto err;
+			}
+
 			if (!node) {
 				/* The root node must have an empty name */
 				if (*pathp) {
@@ -243,9 +255,6 @@ static struct device_node *__of_unflatten_dtb(const void *infdt, int size,
 				node = of_new_node(node, pathp);
 			}
 
-			dt_struct = dt_struct_advance(&f, dt_struct,
-					sizeof(struct fdt_node_header) + len + 1);
-
 			break;
 
 		case FDT_END_NODE:
@@ -257,7 +266,11 @@ static struct device_node *__of_unflatten_dtb(const void *infdt, int size,
 
 			node = node->parent;
 
-			dt_struct = dt_struct_advance(&f, dt_struct, FDT_TAGSIZE);
+			dt_struct = dt_struct_advance(&f, dt_struct, FDT_TAGSIZE, 0);
+			if (!dt_struct) {
+				ret = -ESPIPE;
+				goto err;
+			}
 
 			break;
 
@@ -272,7 +285,14 @@ static struct device_node *__of_unflatten_dtb(const void *infdt, int size,
 			nodep = fdt_prop->data;
 
 			name = dt_string(&f, dt_strings, fdt32_to_cpu(fdt_prop->nameoff));
-			if (!name || !node || is_reserved_name(name)) {
+			if (!name || !node ||  is_reserved_name(name)) {
+				ret = -ESPIPE;
+				goto err;
+			}
+
+			dt_struct = dt_struct_advance(&f, dt_struct,
+					sizeof(struct fdt_property), len);
+			if (!dt_struct) {
 				ret = -ESPIPE;
 				goto err;
 			}
@@ -285,13 +305,15 @@ static struct device_node *__of_unflatten_dtb(const void *infdt, int size,
 			if (!strcmp(name, "phandle") && len == 4)
 				node->phandle = be32_to_cpup(of_property_get_value(p));
 
-			dt_struct = dt_struct_advance(&f, dt_struct,
-					sizeof(struct fdt_property) + len);
 
 			break;
 
 		case FDT_NOP:
-			dt_struct = dt_struct_advance(&f, dt_struct, FDT_TAGSIZE);
+			dt_struct = dt_struct_advance(&f, dt_struct, FDT_TAGSIZE, 0);
+			if (!dt_struct) {
+				ret = -ESPIPE;
+				goto err;
+			}
 
 			break;
 
@@ -301,11 +323,6 @@ static struct device_node *__of_unflatten_dtb(const void *infdt, int size,
 		default:
 			pr_err("unflatten: Unknown tag 0x%08X\n", tag);
 			ret = -EINVAL;
-			goto err;
-		}
-
-		if (!dt_struct) {
-			ret = -ESPIPE;
 			goto err;
 		}
 	}
@@ -342,6 +359,18 @@ struct device_node *of_unflatten_dtb_const(const void *infdt, int size)
 {
 	return __of_unflatten_dtb(infdt, size, true);
 }
+
+static int fuzz_dtb(const u8 *data, size_t size)
+{
+	struct device_node *np;
+
+	np = of_unflatten_dtb_const(data, size);
+	if (!IS_ERR(np))
+		of_delete_node(np);
+
+	return 0;
+}
+fuzz_test("dtb", fuzz_dtb);
 
 struct fdt {
 	void *dt;
@@ -698,7 +727,7 @@ static int fdt_string_is_compatible(const char *haystack, int haystack_len,
 	const char *p;
 	int index = 0;
 
-	while (haystack_len >= needle_len) {
+	while (haystack_len > needle_len) {
 		if (memcmp(needle, haystack, needle_len + 1) == 0)
 			return OF_DEVICE_COMPATIBLE_MAX_SCORE - (index << 2);
 
@@ -751,7 +780,9 @@ int fdt_machine_is_compatible(const struct fdt_header *fdt, size_t fdt_size, con
 				return 0;
 
 			dt_struct = dt_struct_advance(&f, dt_struct,
-					sizeof(struct fdt_node_header) + 1);
+					sizeof(struct fdt_node_header), 1);
+			if (!dt_struct)
+				return 0;
 
 			/*
 			 * Quoting Device Tree Specification v0.4 §5.4.2:
@@ -775,25 +806,52 @@ int fdt_machine_is_compatible(const struct fdt_header *fdt, size_t fdt_size, con
 			if (!name)
 				return 0;
 
-			if (strcmp(name, "compatible")) {
-				dt_struct = dt_struct_advance(&f, dt_struct,
-							      sizeof(struct fdt_property) + len);
-				break;
-			}
+			dt_struct = dt_struct_advance(&f, dt_struct,
+						      sizeof(struct fdt_property), len);
+			if (!dt_struct)
+				return 0;
+
+			if (strcmp(name, "compatible"))
+				continue;
 
 			return fdt_string_is_compatible(fdt_prop->data, len, compat, compat_len);
 
 		case FDT_NOP:
-			dt_struct = dt_struct_advance(&f, dt_struct, FDT_TAGSIZE);
+			dt_struct = dt_struct_advance(&f, dt_struct, FDT_TAGSIZE, 0);
+			if (!dt_struct)
+				return 0;
 			break;
 
 		default:
 			return 0;
 		}
-
-		if (!dt_struct)
-			return 0;
 	}
 
 	return 0;
 }
+
+/*
+ * In order to randomize all inputs to fdt_machine_is_compatible,
+ * we use the last 32 bytes of the random data as a compatible.
+ * As there maybe embedded nul bytes, the size thus varies
+ * between 0 and 31 bytes.
+ * of 
+ */
+#define COMPAT_THRESHOLD	768
+#define COMPAT_LEN		32
+
+static int fuzz_fdt_compatible(const u8 *data, size_t size)
+{
+	char compat[32] = "barebox,sandbox";
+
+	if (size > COMPAT_THRESHOLD) {
+		size -= COMPAT_LEN;
+		memcpy(compat, &data[COMPAT_THRESHOLD - COMPAT_LEN], COMPAT_LEN);
+		compat[COMPAT_LEN - 1] = '\0';
+	}
+
+	fdt_machine_is_compatible((const void *)data, size, compat);
+
+	return 0;
+}
+fuzz_test("fdt-compatible", fuzz_fdt_compatible);

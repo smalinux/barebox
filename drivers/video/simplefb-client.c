@@ -18,6 +18,7 @@
 #include <linux/platform_data/simplefb.h>
 #include <driver.h>
 #include <of.h>
+#include <mmu.h>
 
 static struct fb_ops simplefb_ops;
 
@@ -96,7 +97,7 @@ static int simplefb_probe(struct device *dev)
 	if (ret)
 		return ret;
 
-	mem = dev_request_mem_resource(dev, 0);
+	mem = dev_get_resource(dev, IORESOURCE_MEM, 0);
 	if (IS_ERR(mem)) {
 		dev_err(dev, "No memory resource\n");
 		return PTR_ERR(mem);
@@ -116,9 +117,14 @@ static int simplefb_probe(struct device *dev)
 	info->blue = params.format->blue;
 	info->transp = params.format->transp;
 
-	info->screen_base = (void *)mem->start;
+	info->screen_base = IOMEM(mem->start);
 	info->screen_size = resource_size(mem);
 
+	/*
+	 * Best effort: Some platforms don't need this and those that do,
+	 * will at worst have some graphic artifacts on lack of remap_range.
+	 */
+	(void)remap_range(info->screen_base, info->screen_size, MAP_WRITECOMBINE);
 
 	info->fbops = &simplefb_ops;
 

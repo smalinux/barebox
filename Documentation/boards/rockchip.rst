@@ -88,11 +88,15 @@ With these barebox can be compiled as:
 
 .. note:: When compiling OP-TEE yourself, use the tee.bin image as it has
   a header telling barebox where to load the image to.
-  Without the header, barebox will fallback to the hardcoded addresses expected
-  by the vendor blobs in the rkbin repository.
+  The tee-raw.bin image lacks a header and thus barebox will fallback to the hardcoded
+  addresses expected by the vendor blobs in the rkbin repository.
 
 .. note:: The RK3566 and RK3568 seem to share the bl31 and bl32 firmware files,
   whereas the memory initialization blob is different.
+
+.. note:: The bl31 from the rkbin repository seems to be unable to handle
+  device trees of a larger size (for example, if CONFIG_OF_OVERLAY_LIVE is
+  enabled). Disable CONFIG_ARCH_ROCKCHIP_ATF_PASS_FDT in this case.
 
 Creating a bootable SD card
 ---------------------------

@@ -87,7 +87,9 @@ static int do_bootz(int argc, char *argv[])
 		} else {
 			zimage = (void *)bank->start + SZ_8M;
 			res = request_sdram_region("zimage",
-					bank->start + SZ_8M, end);
+					bank->start + SZ_8M, end,
+					MEMTYPE_LOADER_CODE,
+					MEMATTRS_RWX);
 			if (!res) {
 				printf("can't request region for kernel\n");
 				goto err_out1;
@@ -110,9 +112,12 @@ static int do_bootz(int argc, char *argv[])
 	}
 
 	printf("loaded zImage from %s with size %d\n", argv[1], end);
-#ifdef CONFIG_OFTREE
-	oftree = of_get_fixed_tree(NULL);
-#endif
+	oftree = of_get_fixed_tree_for_boot(NULL);
+	if (!oftree) {
+		printf("No devicetree given.\n");
+		return -EINVAL;
+	}
+
 	ret = of_overlay_load_firmware();
 	if (ret)
 		return ret;

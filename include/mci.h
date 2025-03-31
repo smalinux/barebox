@@ -53,11 +53,20 @@
 #define MMC_CAP_SD_HIGHSPEED		(1 << 3)
 #define MMC_CAP_MMC_HIGHSPEED		(1 << 4)
 #define MMC_CAP_MMC_HIGHSPEED_52MHZ	(1 << 5)
-#define MMC_CAP_MMC_3_3V_DDR		(1 << 7)	/* Host supports eMMC DDR 3.3V */
-#define MMC_CAP_MMC_1_8V_DDR		(1 << 8)	/* Host supports eMMC DDR 1.8V */
-#define MMC_CAP_MMC_1_2V_DDR		(1 << 9)	/* Host supports eMMC DDR 1.2V */
-#define MMC_CAP_DDR			(MMC_CAP_MMC_3_3V_DDR | MMC_CAP_MMC_1_8V_DDR | \
-					 MMC_CAP_MMC_1_2V_DDR)
+#define MMC_CAP_3_3V_DDR		(1 << 7)	/* Host supports eMMC DDR 3.3V */
+#define MMC_CAP_1_8V_DDR		(1 << 8)	/* Host supports eMMC DDR 1.8V */
+#define MMC_CAP_1_2V_DDR		(1 << 9)	/* Host supports eMMC DDR 1.2V */
+#define MMC_CAP_DDR			(MMC_CAP_3_3V_DDR | MMC_CAP_1_8V_DDR | \
+					 MMC_CAP_1_2V_DDR)
+#define MMC_CAP_NONREMOVABLE	(1 << 8)	/* Nonremovable e.g. eMMC */
+#define MMC_CAP_UHS_SDR12	(1 << 16)	/* Host supports UHS SDR12 mode */
+#define MMC_CAP_UHS_SDR25	(1 << 17)	/* Host supports UHS SDR25 mode */
+#define MMC_CAP_UHS_SDR50	(1 << 18)	/* Host supports UHS SDR50 mode */
+#define MMC_CAP_UHS_SDR104	(1 << 19)	/* Host supports UHS SDR104 mode */
+#define MMC_CAP_UHS_DDR50	(1 << 20)	/* Host supports UHS DDR50 mode */
+#define MMC_CAP_UHS		(MMC_CAP_UHS_SDR12 | MMC_CAP_UHS_SDR25 | \
+				 MMC_CAP_UHS_SDR50 | MMC_CAP_UHS_SDR104 | \
+				 MMC_CAP_UHS_DDR50)
 /* Mask of all caps for bus width */
 #define MMC_CAP_BIT_DATA_MASK		(MMC_CAP_4_BIT_DATA | MMC_CAP_8_BIT_DATA)
 
@@ -87,11 +96,15 @@
 #define MMC_CMD_READ_MULTIPLE_BLOCK	18
 #define MMC_SEND_TUNING_BLOCK		19   /* adtc R1  */
 #define MMC_SEND_TUNING_BLOCK_HS200	21   /* adtc R1  */
+#define MMC_CMD_SET_BLOCK_COUNT		23
 #define MMC_CMD_WRITE_SINGLE_BLOCK	24
 #define MMC_CMD_WRITE_MULTIPLE_BLOCK	25
 #define MMC_CMD_APP_CMD			55
 #define MMC_CMD_SPI_READ_OCR		58
 #define MMC_CMD_SPI_CRC_ON_OFF		59
+
+#define MMC_CMD23_ARG_BLOCKS	GENMASK(15, 0)
+#define MMC_CMD23_ARG_REL_WR	BIT(31)
 
   /* class 5 */
 #define MMC_ERASE_GROUP_START    35   /* ac   [31:0] data addr   R1  */
@@ -195,6 +208,8 @@
 
 #define SD_ERASE_ARG			0x00000000
 #define SD_DISCARD_ARG			0x00000001
+
+#define mmc_driver_type_mask(n)		(1 << (n))
 
 /*
  * EXT_CSD fields
@@ -343,6 +358,7 @@
  */
 #define EXT_CSD_PART_CONFIG_ACC_MASK	(0x7)
 #define EXT_CSD_PART_CONFIG_ACC_BOOT0	(0x1)
+#define EXT_CSD_PART_CONFIG_ACC_RPMB	(0x3)
 #define EXT_CSD_PART_CONFIG_ACC_GPP0	(0x4)
 
 #define EXT_CSD_CMD_SET_NORMAL		(1<<0)
@@ -475,6 +491,28 @@ struct mci_cmd {
 	unsigned response[4];	/**< card's response */
 };
 
+/**
+ * @param p Command definition to setup
+ * @param cmd Valid SD/MMC command (refer MMC_CMD_* / SD_CMD_*)
+ * @param arg Argument for the command (optional)
+ * @param response Command's response type (refer MMC_RSP_*)
+ *
+ * Note: When calling, the 'response' must match command's requirements
+ */
+static inline void mci_setup_cmd(struct mci_cmd *p, unsigned cmd,
+				 unsigned arg, unsigned response)
+{
+	p->cmdidx = cmd;
+	p->cmdarg = arg;
+	p->resp_type = response;
+}
+
+static inline bool mmc_op_tuning(u32 cmdidx)
+{
+	return cmdidx == MMC_SEND_TUNING_BLOCK ||
+	       cmdidx == MMC_SEND_TUNING_BLOCK_HS200;
+}
+
 /** data information to be used with some SD/MMC commands */
 struct mci_data {
 	union {
@@ -484,6 +522,7 @@ struct mci_data {
 	unsigned flags;		/**< refer MMC_DATA_* to define direction */
 	unsigned blocks;	/**< block count to handle in this command */
 	unsigned blocksize;	/**< block size in bytes (mostly 512) */
+	unsigned timeout_ns;	/**< data timeout in ns */
 };
 
 enum mci_timing {
@@ -524,6 +563,7 @@ struct mci_ios {
 	unsigned int		clock;			/* clock rate */
 	enum mci_bus_width	bus_width;		/* data bus width */
 	enum mci_timing		timing;			/* timing specification used */
+	unsigned char		drv_type;		/* driver type (A, B, C, D) */
 };
 
 struct mci;
@@ -549,6 +589,8 @@ struct mci_host {
 	struct device *hw_dev;	/**< the host MCI hardware device */
 	struct mci *mci;
 	const char *devname;		/**< the devicename for the card, defaults to disk%d */
+	int of_id;
+	bool of_id_valid;
 	unsigned voltages;
 	unsigned host_caps;	/**< Host's interface capabilities, refer MMC_VDD_* */
 	unsigned caps2;		/* More host capabilities */
@@ -583,10 +625,9 @@ struct mci_host {
 #define MMC_CAP2_CRYPTO		0
 	unsigned f_min;		/**< host interface lower limit */
 	unsigned f_max;		/**< host interface upper limit */
-	unsigned clock;		/**< Current clock used to talk to the card */
 	unsigned actual_clock;
-	enum mci_bus_width bus_width;	/**< used data bus width to the card */
-	enum mci_timing timing;	/**< used timing specification to the card */
+	struct mci_ios ios;		/* current io bus settings */
+	unsigned mmc_avail_type;	/**< supported device type by both host and card */
 	unsigned hs_max_dtr;
 	unsigned hs200_max_dtr;
 	unsigned max_req_size;
@@ -595,6 +636,13 @@ struct mci_host {
 	int broken_cd;		/**< card detect is broken */
 	bool non_removable;	/**< device is non removable */
 	bool disable_wp;	/**< ignore write-protect detection logic */
+	bool fixed_drv_type_valid;
+	unsigned char fixed_drv_type;	/**< fixed driver type for non-removable media */
+	unsigned char	drive_strength;	/**< driver type (A, B, C, D) */
+#define MMC_SET_DRIVER_TYPE_B	0
+#define MMC_SET_DRIVER_TYPE_A	1
+#define MMC_SET_DRIVER_TYPE_C	2
+#define MMC_SET_DRIVER_TYPE_D	3
 	struct regulator *supply;
 	struct mci_ops ops;
 };
@@ -602,9 +650,11 @@ struct mci_host {
 #define MMC_NUM_BOOT_PARTITION	2
 #define MMC_NUM_GP_PARTITION	4
 #define MMC_NUM_USER_PARTITION	1
+#define MMC_NUM_RPMB_PARTITION	1
 #define MMC_NUM_PHY_PARTITION	(MMC_NUM_BOOT_PARTITION + \
                                  MMC_NUM_GP_PARTITION + \
-                                 MMC_NUM_USER_PARTITION)
+                                 MMC_NUM_USER_PARTITION + \
+                                 MMC_NUM_RPMB_PARTITION)
 
 struct mci_part {
 	struct block_device	blk;		/**< the blockdevice for the card */
@@ -670,6 +720,8 @@ struct mci {
 	int boot_ack_enable;
 
 	struct mci_part part[MMC_NUM_PHY_PARTITION];
+	struct mci_part *rpmb_part;
+
 	int nr_parts;
 	char *cdevname;
 
@@ -712,22 +764,38 @@ static inline struct mci *mci_get_device_by_devpath(const char *devpath)
 
 static inline int mmc_card_hs(struct mci *mci)
 {
-	return mci->host->timing == MMC_TIMING_SD_HS ||
-		mci->host->timing == MMC_TIMING_MMC_HS;
+	return mci->host->ios.timing == MMC_TIMING_SD_HS ||
+		mci->host->ios.timing == MMC_TIMING_MMC_HS;
 }
 
+#if IN_PROPER
 /*
  * Execute tuning sequence to seek the proper bus operating
  * conditions for HS200 and HS400, which sends CMD21 to the device.
  */
 int mmc_hs200_tuning(struct mci *mci);
 int mci_execute_tuning(struct mci *mci);
+int mmc_send_tuning(struct mci *mci, u32 opcode);
 int mci_send_abort_tuning(struct mci *mci, u32 opcode);
+
+#else
+static inline int mmc_hs200_tuning(struct mci *mci) { return -ENOSYS; }
+static inline int mci_execute_tuning(struct mci *mci) { return -ENOSYS; }
+static inline int mmc_send_tuning(struct mci *mci, u32 opcode) { return -ENOSYS; }
+static inline int mci_send_abort_tuning(struct mci *mci, u32 opcode) { return -ENOSYS; }
+#endif
+
 int mmc_select_timing(struct mci *mci);
+int mci_set_blockcount(struct mci *mci, unsigned int cmdarg);
+int mci_blk_part_switch(struct mci_part *part);
+int mci_send_cmd(struct mci *mci, struct mci_cmd *cmd, struct mci_data *data);
+struct mci *mci_get_rpmb_dev(unsigned int id);
+int mci_rpmb_route_frames(struct mci *mci, void *req, unsigned long reqlen,
+			  void *rsp, unsigned long rsplen);
 
 static inline bool mmc_card_hs200(struct mci *mci)
 {
-	return mci->host->timing == MMC_TIMING_MMC_HS200;
+	return mci->host->ios.timing == MMC_TIMING_MMC_HS200;
 }
 
 #endif /* _MCI_H_ */

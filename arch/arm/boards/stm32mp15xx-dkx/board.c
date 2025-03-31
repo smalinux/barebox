@@ -3,18 +3,22 @@
 #include <init.h>
 #include <mach/stm32mp/bbu.h>
 #include <deep-probe.h>
+#include <envfs.h>
 
 static int dkx_probe(struct device *dev)
 {
-	const void *model;
+	const char *model;
 
-	stm32mp_bbu_mmc_register_handler("sd", "/dev/mmc0.ssbl",
-					 BBU_HANDLER_FLAG_DEFAULT);
+	stm32mp_bbu_mmc_fip_register("sd", "/dev/mmc0",
+				     BBU_HANDLER_FLAG_DEFAULT);
 
-	if (dev_get_drvdata(dev, &model) == 0)
+	model = device_get_match_data(dev);
+	if (model)
 		barebox_set_model(model);
 
 	barebox_set_hostname("stm32mp15xx-dkx");
+
+	defaultenv_append_directory(defaultenv_stm32mp15xx_dkx);
 
 	return 0;
 }

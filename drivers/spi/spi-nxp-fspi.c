@@ -453,7 +453,7 @@ static bool nxp_fspi_supports_op(struct spi_mem *mem,
 	    op->data.nbytes > f->devtype_data->txfifo)
 		return false;
 
-	return true;
+	return spi_mem_default_supports_op(mem, op);
 }
 
 /* Instead of busy looping invoke readl_poll_timeout functionality. */
@@ -1039,11 +1039,11 @@ err_put_ctrl:
 }
 
 static const struct of_device_id nxp_fspi_dt_ids[] = {
-	{ .compatible = "nxp,imx8mm-fspi", .data = (void *)&imx8mm_data, },
-	{ .compatible = "nxp,imx8mn-fspi", .data = (void *)&imx8mm_data, },
-	{ .compatible = "nxp,imx8mp-fspi", .data = (void *)&imx8mm_data, },
-	{ .compatible = "nxp,imx8qxp-fspi", .data = (void *)&imx8qxp_data, },
-	{ .compatible = "nxp,imx8dxl-fspi", .data = (void *)&imx8dxl_data, },
+	{ .compatible = "nxp,imx8mm-fspi", .data = &imx8mm_data, },
+	{ .compatible = "nxp,imx8mn-fspi", .data = &imx8mm_data, },
+	{ .compatible = "nxp,imx8mp-fspi", .data = &imx8mm_data, },
+	{ .compatible = "nxp,imx8qxp-fspi", .data = &imx8qxp_data, },
+	{ .compatible = "nxp,imx8dxl-fspi", .data = &imx8dxl_data, },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, nxp_fspi_dt_ids);

@@ -14,6 +14,7 @@
 
 import sys
 import os
+import re
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -34,7 +35,7 @@ extensions = []
 templates_path = ['_templates']
 
 # The suffix of source filenames.
-source_suffix = '.rst'
+source_suffix = {'.rst': 'restructuredtext'}
 
 # The encoding of source files.
 #source_encoding = 'utf-8-sig'
@@ -44,7 +45,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'barebox'
-copyright = u'2014–2022, The barebox project'
+copyright = u'2014–2025, The barebox project'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -260,3 +261,20 @@ texinfo_documents = [
 #texinfo_no_detailmenu = False
 
 highlight_language = 'none'
+
+from sphinx.search import SearchEnglish
+from sphinx.search import languages
+class DashFriendlySearchEnglish(SearchEnglish):
+
+    # Accept words that can include 'inner' hyphens or dots
+    _word_re = re.compile(r'[\w]+(?:[\.\-][\w]+)*')
+
+    js_splitter_code = r"""
+function splitQuery(query) {
+    return query
+        .split(/[^\p{Letter}\p{Number}_\p{Emoji_Presentation}\-\.]+/gu)
+        .filter(term => term.length > 0);
+}
+"""
+
+languages['en'] = DashFriendlySearchEnglish

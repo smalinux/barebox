@@ -10,15 +10,13 @@
  */
 
 /dts-v1/;
-#ifdef CONFIG_BOOTM_FITIMAGE_PUBKEY
-#include CONFIG_BOOTM_FITIMAGE_PUBKEY
-#endif
 #include "imx6dl-phytec-pfla02.dtsi"
 #include "imx6qdl-phytec-pbab01.dtsi"
 
 / {
 	model = "Phytec phyFLEX-i.MX6 Duallite Carrier-Board";
 	compatible = "phytec,imx6x-pbab01", "phytec,imx6dl-pfla02", "fsl,imx6dl";
+	barebox,deep-probe;
 
 	chosen {
 		stdout-path = &uart4;

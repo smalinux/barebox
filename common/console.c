@@ -5,6 +5,7 @@
  */
 
 #include <config.h>
+#include <security/config.h>
 #include <common.h>
 #include <stdarg.h>
 #include <malloc.h>
@@ -24,6 +25,7 @@
 #include <linux/list.h>
 #include <linux/stringify.h>
 #include <debug_ll.h>
+#include <security/config.h>
 
 LIST_HEAD(console_list);
 EXPORT_SYMBOL(console_list);
@@ -81,6 +83,7 @@ int console_close(struct console_device *cdev)
 
 int console_set_active(struct console_device *cdev, unsigned flag)
 {
+	unsigned flag_new = flag & ~cdev->f_active;
 	int ret;
 
 	if (!cdev->getc)
@@ -115,6 +118,10 @@ int console_set_active(struct console_device *cdev, unsigned flag)
 		barebox_banner();
 		while (kfifo_getc(console_output_fifo, &ch) == 0)
 			console_putc(CONSOLE_STDOUT, ch);
+	} else if (IS_ENABLED(CONFIG_BANNER) && cdev->puts &&
+		   flag_new == CONSOLE_STDIOE) {
+		cdev->puts(cdev, version_string, strlen(version_string));
+		cdev->puts(cdev, "\n\n", 2);
 	}
 
 	return 0;
@@ -222,17 +229,12 @@ static void console_init_early(void)
 
 static void console_add_earlycon_param(struct console_device *cdev, unsigned baudrate)
 {
-	char *str;
-
 	if (!cdev->linux_earlycon_name)
 		return;
 
-	str = basprintf("earlycon=%s,0x%lx", cdev->linux_earlycon_name,
-			(ulong)cdev->phys_base);
-
-	dev_add_param_fixed(&cdev->class_dev, "linux.bootargs.earlycon", str);
-
-	free(str);
+	dev_add_param_fixed(&cdev->class_dev, "linux.bootargs.earlycon",
+			    "earlycon=%s,0x%lx", cdev->linux_earlycon_name,
+			    (ulong)cdev->phys_base);
 }
 
 void console_set_stdoutpath(struct console_device *cdev, unsigned baudrate)
@@ -264,7 +266,7 @@ struct console_device *of_console_by_stdout_path(void)
 		return NULL;
 
 	for_each_console(console) {
-		if (dev_of_node(console->dev) == stdout_np)
+		if (console->dev && dev_of_node(console->dev) == stdout_np)
 			return console;
 	}
 
@@ -338,7 +340,7 @@ int console_register(struct console_device *newcdev)
 
 	if (newcdev->devname) {
 		dev->id = newcdev->devid;
-		dev_set_name(dev, newcdev->devname);
+		dev_set_name(dev, "%s", newcdev->devname);
 	} else {
 		dev->id = DEVICE_ID_DYNAMIC;
 		dev_set_name(dev, "cs");
@@ -421,7 +423,7 @@ int console_register(struct console_device *newcdev)
 	ret = devfs_create(&newcdev->devfs);
 
 	if (ret) {
-		pr_err("devfs entry creation failed: %s\n", strerror(-ret));
+		pr_err("devfs entry creation failed: %pe\n", ERR_PTR(ret));
 		return ret;
 	}
 
@@ -497,7 +499,8 @@ static int getc_raw(void)
 			if (cdev->tstc(cdev)) {
 				int ch = cdev->getc(cdev);
 
-				if (IS_ENABLED(CONFIG_RATP) && ch == 0x01) {
+				if (IS_ENABLED(CONFIG_RATP) && ch == 0x01 &&
+				    IS_ALLOWED(SCONFIG_RATP)) {
 					barebox_ratp(cdev);
 					return -1;
 				}
@@ -515,6 +518,9 @@ static int tstc_raw(void)
 {
 	struct console_device *cdev;
 
+	if (!IS_ALLOWED(SCONFIG_CONSOLE_INPUT))
+		return 0;
+
 	for_each_console(cdev) {
 		if (!(cdev->f_active & CONSOLE_STDIN))
 			continue;
@@ -529,6 +535,9 @@ int getchar(void)
 {
 	unsigned char ch;
 	uint64_t start;
+
+	if (!IS_ALLOWED(SCONFIG_CONSOLE_INPUT))
+		return -1;
 
 	/*
 	 * For 100us we read the characters from the serial driver
@@ -548,8 +557,8 @@ int getchar(void)
 			start = get_time_ns();
 		}
 
-		if (is_timeout(start, 100 * USECOND) &&
-				kfifo_len(console_input_fifo))
+		if (is_timeout_interruptible(start, 100 * USECOND) &&
+		    kfifo_len(console_input_fifo))
 			break;
 	}
 
@@ -639,61 +648,6 @@ void console_flush(void)
 	}
 }
 EXPORT_SYMBOL(console_flush);
-
-static int ctrlc_abort;
-static int ctrlc_allowed;
-
-void ctrlc_handled(void)
-{
-	ctrlc_abort = 0;
-}
-
-/* test if ctrl-c was pressed */
-int ctrlc(void)
-{
-	int ret = 0;
-
-	resched();
-
-	if (!ctrlc_allowed)
-		return 0;
-
-	if (ctrlc_abort)
-		return 1;
-
-#ifdef CONFIG_ARCH_HAS_CTRLC
-	ret = arch_ctrlc();
-#else
-	if (tstc() && getchar() == 3)
-		ret = 1;
-#endif
-
-	if (ret)
-		ctrlc_abort = 1;
-
-	return ret;
-}
-EXPORT_SYMBOL(ctrlc);
-
-static int console_ctrlc_init(void)
-{
-	globalvar_add_simple_bool("console.ctrlc_allowed", &ctrlc_allowed);
-	return 0;
-}
-device_initcall(console_ctrlc_init);
-
-void console_ctrlc_allow(void)
-{
-	ctrlc_allowed = 1;
-}
-
-void console_ctrlc_forbid(void)
-{
-	ctrlc_allowed = 0;
-}
-
-BAREBOX_MAGICVAR(global.console.ctrlc_allowed,
-		"If true, scripts can be aborted with ctrl-c");
 
 BAREBOX_MAGICVAR(global.linux.bootargs.console,
 		"console= argument for Linux from the stdout-path property in /chosen node");

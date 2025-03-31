@@ -5,6 +5,7 @@
 
 #include <linux/list.h>
 #include <linux/time.h>
+#include <linux/stat.h>
 #include <linux/mount.h>
 #include <linux/path.h>
 #include <linux/spinlock.h>
@@ -227,8 +228,6 @@ struct file {
 #define FILE_SIZE_STREAM	((loff_t) -1)
 #define f_size f_inode->i_size
 	struct inode		*f_inode;	/* cached value */
-#define f_dentry	f_path.dentry
-#define f_vfsmnt	f_path.mnt
 	const struct file_operations	*f_op;
 	unsigned int 		f_flags;
 	loff_t			f_pos;
@@ -237,6 +236,25 @@ struct file {
 	u64			f_version;
 	/* private to the filesystem driver */
 	void			*private_data;
+};
+
+/*
+ * Attribute flags.  These should be or-ed together to figure out what
+ * has been changed!
+ */
+#define ATTR_SIZE	(1 << 3)
+#define ATTR_FILE	(1 << 13)
+
+struct iattr {
+	unsigned int	ia_valid;
+	loff_t		ia_size;
+
+	/*
+	 * Not an attribute, but an auxiliary info for filesystems wanting to
+	 * implement an ftruncate() like method.  NOTE: filesystem should
+	 * check for (ia_valid & ATTR_FILE), and not for (ia_file != NULL).
+	 */
+	struct file	*ia_file;
 };
 
 struct super_operations {
@@ -393,10 +411,21 @@ static inline loff_t i_size_read(const struct inode *inode)
 	return inode->i_size;
 }
 
+static inline void i_size_write(struct inode *inode, loff_t i_size)
+{
+	inode->i_size = i_size;
+}
+
+static inline void truncate_setsize(struct inode *inode, loff_t i_size)
+{
+	i_size_write(inode, i_size);
+}
+
 struct inode *new_inode(struct super_block *sb);
 unsigned int get_next_ino(void);
 void iput(struct inode *);
 struct inode *iget(struct inode *);
+void ihold(struct inode *inode);
 void inc_nlink(struct inode *inode);
 void clear_nlink(struct inode *inode);
 void set_nlink(struct inode *inode, unsigned int nlink);
@@ -414,6 +443,7 @@ struct inode_operations {
 	int (*rmdir) (struct inode *,struct dentry *);
 	int (*rename) (struct inode *, struct dentry *,
 		       struct inode *, struct dentry *, unsigned int);
+	int (*tmpfile)(struct inode *, struct file *, umode_t);
 };
 
 static inline ino_t parent_ino(struct dentry *dentry)
@@ -452,20 +482,34 @@ static inline int dir_emit_dots(struct file *file, struct dir_context *ctx)
 	return true;
 }
 
+enum erase_type;
+
 struct file_operations {
 	int (*open) (struct inode *, struct file *);
 	int (*release) (struct inode *, struct file *);
 	int (*iterate) (struct file *, struct dir_context *);
-	/*
-	 * TODO: move the remaining callbacks in struct fs_driver
-	 * here with Linux semantics
-	 */
+	int (*read)(struct file *f, void *buf, size_t size);
+	int (*write)(struct file *f, const void *buf,
+			size_t size);
+	int (*flush)(struct file *f);
+	int (*lseek)(struct file *f, loff_t pos);
+
+	int (*ioctl)(struct file *f, unsigned int request, void *buf);
+	int (*erase)(struct file *f, loff_t count,
+			loff_t offset, enum erase_type type);
+	int (*protect)(struct file *f, size_t count,
+			loff_t offset, int prot);
+	int (*discard_range)(struct file *f, loff_t count, loff_t offset);
+	int (*memmap)(struct file *f, void **map, int flags);
+	int (*truncate)(struct file *f, loff_t size);
 };
 
 void drop_nlink(struct inode *inode);
 
 extern const struct file_operations simple_dir_operations;
 extern const struct inode_operations simple_symlink_inode_operations;
+
+extern void d_tmpfile(struct file *, struct inode *);
 
 int simple_empty(struct dentry *dentry);
 int simple_unlink(struct inode *dir, struct dentry *dentry);
@@ -475,5 +519,44 @@ int dcache_readdir(struct file *, struct dir_context *);
 const char *simple_get_link(struct dentry *dentry, struct inode *inode);
 struct inode *iget_locked(struct super_block *, unsigned long);
 void iget_failed(struct inode *inode);
+
+static inline void inode_init_owner(struct inode *inode,
+				    const struct inode *dir, umode_t mode)
+{
+	if (dir && dir->i_mode & S_ISGID) {
+		inode->i_gid = dir->i_gid;
+
+		/* Directories are special, and always inherit S_ISGID */
+		if (S_ISDIR(mode))
+			mode |= S_ISGID;
+	}
+
+	inode->i_mode = mode;
+}
+
+static inline void mark_inode_dirty(struct inode *inode) {}
+
+int finish_open(struct file *file, struct dentry *dentry);
+
+/* Helper for the simple case when original dentry is used */
+static inline int finish_open_simple(struct file *file, int error)
+{
+	if (error)
+		return error;
+
+	return finish_open(file, file->f_path.dentry);
+}
+
+static inline void inode_inc_link_count(struct inode *inode)
+{
+	inc_nlink(inode);
+	mark_inode_dirty(inode);
+}
+
+static inline void inode_dec_link_count(struct inode *inode)
+{
+	drop_nlink(inode);
+	mark_inode_dirty(inode);
+}
 
 #endif /* _LINUX_FS_H */

@@ -112,11 +112,21 @@ int of_parse_partitions(struct cdev *cdev, struct device_node *node)
 	}
 
 	for_each_child_of_node(node, n) {
-		of_parse_partition(cdev, n);
+		struct cdev *partcdev;
+		struct device *dev;
+
+		partcdev = of_parse_partition(cdev, n);
+		if (!partcdev || !subnode)
+			continue;
+
+		/* TODO: migrate to a partition-only bus?
+		 * Linux uses mtd_notifier for this
+		 */
+		dev = of_add_child_device(partcdev->dev, partcdev->name,
+					  DEVICE_ID_SINGLE, n);
+		WARN_ON(IS_ERR(dev));
 	}
 
-	if (subnode)
-		of_platform_populate(subnode, NULL, cdev->dev);
 	return 0;
 }
 
@@ -206,8 +216,8 @@ int of_fixup_partitions(struct device_node *np, struct cdev *cdev)
 		partnode = np;
 		break;
 	case MTD_OF_BINDING_ADAPTIVE:
-		/* If there's already a compatible property, leave it as-is */
-		if (of_property_present(partnode, "compatible"))
+		/* If there's already a fixed-partitions node, leave compatible as-is */
+		if (of_node_is_fixed_partitions(partnode))
 			break;
 		if (!cdev->mtd)
 			compat = "barebox,fixed-partitions";

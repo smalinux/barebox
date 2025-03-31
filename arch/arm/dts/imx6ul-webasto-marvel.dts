@@ -13,6 +13,7 @@
 / {
 	model = "Webasto common communication board Marvel MK3";
 	compatible = "webasto,imx6ul-marvel-b2", "webasto,imx6ul-marvel", "fsl,imx6ul";
+	barebox,disable-deep-probe;
 
 	chosen {
 		stdout-path = &uart7;
@@ -578,7 +579,3 @@
 	status = "okay";
 };
 
-/* include the FIT public key for verifying on demand */
-#ifdef CONFIG_BOOTM_FITIMAGE_PUBKEY
-#include CONFIG_BOOTM_FITIMAGE_PUBKEY
-#endif

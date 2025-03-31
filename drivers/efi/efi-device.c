@@ -23,24 +23,26 @@
 static int efi_locate_handle(enum efi_locate_search_type search_type,
 		efi_guid_t *protocol,
 		void *search_key,
-		unsigned long *no_handles,
+		size_t *no_handles,
 		efi_handle_t **buffer)
 {
 	return __efi_locate_handle(BS, search_type, protocol, search_key, no_handles,
 				   buffer);
 }
 
+static int efi_device_match_handle(struct device *dev, const void *handle)
+{
+	struct efi_device *efidev = container_of(dev, struct efi_device, dev);
+	return efidev->handle == handle;
+}
+
 static struct efi_device *efi_find_device(efi_handle_t handle)
 {
 	struct device *dev;
-	struct efi_device *efidev;
 
-	bus_for_each_device(&efi_bus, dev) {
-		efidev = container_of(dev, struct efi_device, dev);
-
-		if (efidev->handle == handle)
-			return efidev;
-	}
+	dev = bus_find_device(&efi_bus, NULL, handle, efi_device_match_handle);
+	if (dev)
+		return container_of(dev, struct efi_device, dev);
 
 	return NULL;
 }
@@ -59,14 +61,14 @@ static void efi_devinfo(struct device *dev)
 
 static efi_handle_t efi_find_parent(efi_handle_t handle)
 {
-	unsigned long handle_count = 0;
+	size_t i, handle_count = 0;
 	efi_handle_t *handles = NULL, parent;
-	unsigned long num_guids;
+	size_t j, num_guids;
 	efi_guid_t **guids;
-	int ret, i, j, k;
+	int ret;
 	efi_status_t efiret;
 	struct efi_open_protocol_information_entry *entry_buffer;
-	unsigned long entry_count;
+	size_t k, entry_count;
 
 	ret = efi_locate_handle(BY_PROTOCOL, &efi_device_path_protocol_guid,
 			NULL, &handle_count, &handles);
@@ -194,7 +196,7 @@ static int efi_register_device(struct efi_device *efidev)
 
 	dev_path_str = device_path_to_str(efidev->devpath);
 	if (dev_path_str) {
-		dev_add_param_fixed(&efidev->dev, "devpath", dev_path_str);
+		dev_add_param_fixed(&efidev->dev, "devpath", "%s", dev_path_str);
 		free(dev_path_str);
 	}
 
@@ -215,9 +217,9 @@ static int efi_register_device(struct efi_device *efidev)
  */
 void efi_register_devices(void)
 {
-	unsigned long handle_count = 0;
+	size_t handle_count = 0;
 	efi_handle_t *handles = NULL;
-	unsigned long num_guids;
+	size_t num_guids;
 	efi_guid_t **guids;
 	int ret, i;
 	struct efi_device **efidevs;
@@ -264,9 +266,8 @@ void efi_register_devices(void)
 int efi_connect_all(void)
 {
 	efi_status_t  efiret;
-	unsigned long handle_count;
+	size_t i, handle_count;
 	efi_handle_t *handle_buffer;
-	int i;
 
 	efiret = BS->locate_handle_buffer(ALL_HANDLES, NULL, NULL, &handle_count,
 			&handle_buffer);
@@ -282,9 +283,9 @@ int efi_connect_all(void)
 	return 0;
 }
 
-static int efi_bus_match(struct device *dev, struct driver *drv)
+static int efi_bus_match(struct device *dev, const struct driver *drv)
 {
-	struct efi_driver *efidrv = to_efi_driver(drv);
+	const struct efi_driver *efidrv = to_efi_driver(drv);
 	struct efi_device *efidev = to_efi_device(dev);
 	int i;
 
@@ -292,11 +293,11 @@ static int efi_bus_match(struct device *dev, struct driver *drv)
 		if (!efi_guidcmp(efidrv->guid, efidev->guids[i])) {
 			BS->handle_protocol(efidev->handle, &efidev->guids[i],
 					&efidev->protocol);
-			return 0;
+			return true;
 		}
 	}
 
-	return 1;
+	return false;
 }
 
 static int efi_bus_probe(struct device *dev)
@@ -419,17 +420,17 @@ static int efi_init_devices(void)
 
 	bus_register(&efi_bus);
 
-	dev_add_param_fixed(efi_bus.dev, "fw_vendor", fw_vendor);
+	dev_add_param_fixed(&efi_bus.dev, "fw_vendor", "%s", fw_vendor);
 	free(fw_vendor);
 
-	dev_add_param_uint32_fixed(efi_bus.dev, "major", sys_major, "%u");
-	dev_add_param_uint32_fixed(efi_bus.dev, "minor", sys_minor, "%u");
-	dev_add_param_uint32_fixed(efi_bus.dev, "fw_revision", efi_sys_table->fw_revision, "%u");
-	dev_add_param_bool_fixed(efi_bus.dev, "secure_boot", secure_boot);
-	dev_add_param_bool_fixed(efi_bus.dev, "secure_mode",
+	dev_add_param_uint32_fixed(&efi_bus.dev, "major", sys_major, "%u");
+	dev_add_param_uint32_fixed(&efi_bus.dev, "minor", sys_minor, "%u");
+	dev_add_param_uint32_fixed(&efi_bus.dev, "fw_revision", efi_sys_table->fw_revision, "%u");
+	dev_add_param_bool_fixed(&efi_bus.dev, "secure_boot", secure_boot);
+	dev_add_param_bool_fixed(&efi_bus.dev, "secure_mode",
 				 secure_boot & setup_mode);
 
-	devinfo_add(efi_bus.dev, efi_businfo);
+	devinfo_add(&efi_bus.dev, efi_businfo);
 
 	efi_register_devices();
 

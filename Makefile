@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 VERSION = 2025
-PATCHLEVEL = 03
+PATCHLEVEL = 11
 SUBLEVEL = 0
 EXTRAVERSION =
 NAME = None
@@ -100,7 +100,7 @@ ifeq ($(silence),s)
 quiet=silent_
 endif
 
-export quiet Q KBUILD_VERBOSE
+export quiet Q KBUILD_VERBOSE KPOLICY_TMPUPDATE
 
 # Kbuild will save output files in the current working directory.
 # This does not need to match to the root of the kernel source tree.
@@ -278,7 +278,7 @@ ifneq ($(KBUILD_EXTMOD),)
 endif
 
 ifeq ($(KBUILD_EXTMOD),)
-        ifneq ($(filter config %config,$(MAKECMDGOALS)),)
+        ifneq ($(filter config %config,$(filter-out security_%config,$(MAKECMDGOALS))),)
 		config-build := 1
                 ifneq ($(words $(MAKECMDGOALS)),1)
 			mixed-build := 1
@@ -406,12 +406,14 @@ endif
 
 KBUILD_USERHOSTCFLAGS := -Wall -Wmissing-prototypes -Wstrict-prototypes \
 			      -O2 -fomit-frame-pointer -std=gnu11 \
-			      -D_GNU_SOURCE=""
+			      -include $(srctree)/scripts/include/defines.h
 KBUILD_USERCFLAGS  := $(KBUILD_USERHOSTCFLAGS) $(USERCFLAGS)
 KBUILD_USERLDFLAGS := $(USERLDFLAGS)
 
-KBUILD_HOSTCFLAGS   := $(KBUILD_USERHOSTCFLAGS) $(HOST_LFS_CFLAGS) $(HOSTCFLAGS)
-KBUILD_HOSTCXXFLAGS := -Wall -O2 $(HOST_LFS_CFLAGS) $(HOSTCXXFLAGS)
+KBUILD_HOSTCFLAGS   := $(KBUILD_USERHOSTCFLAGS) $(HOST_LFS_CFLAGS) \
+		       $(HOSTCFLAGS) -I $(srctree)/scripts/include
+KBUILD_HOSTCXXFLAGS := -Wall -O2 $(HOST_LFS_CFLAGS) $(HOSTCXXFLAGS) \
+		       -I $(srctree)/scripts/include
 KBUILD_HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS) $(HOSTLDFLAGS)
 KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
 
@@ -421,6 +423,7 @@ ENVCC		:= $(CC)
 CPP		= $(CC) -E
 ifneq ($(LLVM),)
 CC		= $(LLVM_PREFIX)clang$(LLVM_SUFFIX)
+CXX		= $(LLVM_PREFIX)clang++$(LLVM_SUFFIX)
 LD		= $(LLVM_PREFIX)ld.lld$(LLVM_SUFFIX)
 AR		= $(LLVM_PREFIX)llvm-ar$(LLVM_SUFFIX)
 NM		= $(LLVM_PREFIX)llvm-nm$(LLVM_SUFFIX)
@@ -428,8 +431,11 @@ OBJCOPY		= $(LLVM_PREFIX)llvm-objcopy$(LLVM_SUFFIX)
 OBJDUMP		= $(LLVM_PREFIX)llvm-objdump$(LLVM_SUFFIX)
 READELF		= $(LLVM_PREFIX)llvm-readelf$(LLVM_SUFFIX)
 STRIP		= $(LLVM_PREFIX)llvm-strip$(LLVM_SUFFIX)
+PROFDATA	= $(LLVM_PREFIX)llvm-profdata$(LLVM_SUFFIX)
+COV		= $(LLVM_PREFIX)llvm-cov$(LLVM_SUFFIX)
 else
 CC		= $(CROSS_COMPILE)gcc
+CXX		= $(CROSS_COMPILE)g++
 LD		= $(CROSS_COMPILE)ld
 AR		= $(CROSS_COMPILE)ar
 NM		= $(CROSS_COMPILE)nm
@@ -444,10 +450,12 @@ AWK		= awk
 GENKSYMS	= scripts/genksyms/genksyms
 DEPMOD		= /sbin/depmod
 KALLSYMS	= scripts/kallsyms
+SCONFIGPOST	= scripts/sconfig/sconfigpost
 PERL		= perl
 PYTHON3		= python3
 CHECK		= sparse
 MKIMAGE		= mkimage
+GENHTML		= genhtml
 BASH		= bash
 KGZIP		= gzip
 KBZIP2		= bzip2
@@ -455,6 +463,7 @@ KLZOP		= lzop
 LZMA		= lzma
 LZ4		= lz4
 XZ		= xz
+PYTEST		= $(if $(shell command -v labgrid-pytest 2>/dev/null),labgrid-pytest,pytest)
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ -Wbitwise $(CF)
 CFLAGS_KERNEL	=
@@ -490,9 +499,9 @@ KBUILD_CPPFLAGS        := -D__KERNEL__ -D__BAREBOX__ $(LINUXINCLUDE) \
 			  -fno-builtin -ffreestanding -Ulinux -Uunix
 
 KBUILD_CFLAGS   := -Wall -Wundef -Werror=strict-prototypes -Wno-trigraphs \
-		   -fno-strict-aliasing -fno-common -fshort-wchar \
+		   -fno-strict-aliasing -fno-common -fshort-wchar -funsigned-char \
 		   -Werror=implicit-function-declaration -Werror=implicit-int \
-		   -Werror=int-conversion \
+		   -Werror=int-conversion -Wno-format-zero-length \
 		   -Os -pipe -Wmissing-prototypes -std=gnu11
 KBUILD_AFLAGS          := -D__ASSEMBLY__
 KBUILD_AFLAGS_KERNEL :=
@@ -514,10 +523,10 @@ LDFLAGS_barebox += $(LDFLAGS_common)
 LDFLAGS_pbl += $(LDFLAGS_common)
 LDFLAGS_elf += $(LDFLAGS_common) --nmagic -s
 
-export ARCH SRCARCH CONFIG_SHELL BASH HOSTCC KBUILD_HOSTCFLAGS CROSS_COMPILE LD CC
+export ARCH SRCARCH CONFIG_SHELL BASH HOSTCC KBUILD_HOSTCFLAGS CROSS_COMPILE LD CC CXX
 export CPP AR NM STRIP OBJCOPY OBJDUMP MAKE AWK GENKSYMS PERL PYTHON3 UTS_MACHINE
-export LEX YACC
-export HOSTCXX CHECK CHECKFLAGS MKIMAGE
+export LEX YACC PROFDATA COV GENHTML
+export HOSTCXX CHECK CHECKFLAGS MKIMAGE SCONFIGPOST
 export KGZIP KBZIP2 KLZOP LZMA LZ4 XZ
 export KBUILD_HOSTCXXFLAGS KBUILD_HOSTLDFLAGS KBUILD_HOSTLDLIBS LDFLAGS_MODULE
 export KBUILD_USERCFLAGS KBUILD_USERLDFLAGS
@@ -547,6 +556,10 @@ export RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn \
 PHONY += scripts_basic
 scripts_basic:
 	$(Q)$(MAKE) $(build)=scripts/basic
+
+PHONY += scripts_sconfig
+scripts_sconfig: scripts_basic
+	$(Q)$(MAKE) $(build)=scripts/sconfig
 
 PHONY += outputmakefile
 # Before starting out-of-tree build, make sure the source tree is clean.
@@ -594,6 +607,8 @@ ifdef config-build
 # *config targets only - make sure prerequisites are updated, and descend
 # in scripts/kconfig to make the *config target
 
+# KCONFIG_CONFIG_ORIG is only set for policy kconfig processing
+ifndef KCONFIG_CONFIG_ORIG
 include $(srctree)/scripts/Makefile.defconf
 
 # Read arch specific Makefile to set KBUILD_DEFCONFIG as needed.
@@ -601,6 +616,7 @@ include $(srctree)/scripts/Makefile.defconf
 # used for 'make defconfig'
 include $(srctree)/arch/$(SRCARCH)/Makefile
 export KBUILD_DEFCONFIG CC_VERSION_TEXT
+endif
 
 config: outputmakefile scripts_basic FORCE
 	$(Q)$(MAKE) $(build)=scripts/kconfig KCONFIG_DEFCONFIG_LIST= $@
@@ -659,7 +675,7 @@ endif
 include $(srctree)/scripts/Makefile.lib
 
 # Objects we will link into barebox / subdirs we need to visit
-common-y		:= common/ drivers/ commands/ lib/ crypto/ net/ fs/ firmware/
+common-y		:= common/ drivers/ commands/ lib/ security/ crypto/ net/ fs/ firmware/
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
 
@@ -759,6 +775,9 @@ endif
 # disable invalid "can't wrap" optimizations for signed / pointers
 KBUILD_CFLAGS	+= $(call cc-option,-fno-strict-overflow)
 
+# Explicitly clear padding bits during variable initialization
+KBUILD_CFLAGS += $(call cc-option,-fzero-init-padding-bits=all)
+
 # Make sure -fstack-check isn't enabled (like gentoo apparently did)
 KBUILD_CFLAGS  += $(call cc-option,-fno-stack-check)
 
@@ -779,9 +798,6 @@ KBUILD_USERLDFLAGS += $(filter -m32 -m64, $(KBUILD_CFLAGS))
 # arch Makefile may override CC so keep this after arch Makefile is included
 NOSTDINC_FLAGS += -nostdinc -isystem $(shell $(CC) -print-file-name=include)
 CHECKFLAGS     += $(NOSTDINC_FLAGS)
-
-# warn about C99 declaration after statement
-KBUILD_CFLAGS += $(call cc-option,-Wdeclaration-after-statement,)
 
 # warn about e.g. (unsigned)x < 0
 KBUILD_CFLAGS += $(call cc-option,-Wtype-limits)
@@ -812,26 +828,32 @@ export KBUILD_BINARY ?= barebox.bin
 # Also any assignments in arch/$(SRCARCH)/Makefile take precedence over
 # the default value.
 
-barebox-flash-image: $(KBUILD_IMAGE) FORCE
-	$(call if_changed,ln)
+export BAREBOX_PROPER ?= barebox.bin
 
 barebox-flash-images: $(KBUILD_IMAGE)
 	@echo $^ > $@
 
-images: barebox.bin FORCE
+images: $(BAREBOX_PROPER) FORCE
 	$(Q)$(MAKE) $(build)=images $@
-images/%: barebox.bin FORCE
+images/%: $(BAREBOX_PROPER) FORCE
 	$(Q)$(MAKE) $(build)=images $@
 
-ifdef CONFIG_EFI_STUB
-all: barebox.bin images barebox.efi
-barebox.efi: FORCE
-	$(Q)ln -fsn images/barebox-dt-2nd.img $@
-else ifdef CONFIG_PBL_IMAGE
-all: barebox.bin images
+ifdef CONFIG_PBL_IMAGE
+SYMLINK_TARGET_barebox.efi = images/barebox-dt-2nd.img
+SYMLINK_DEP_barebox.efi = images
+symlink-$(CONFIG_EFI_STUB) += barebox.efi
+all: $(BAREBOX_PROPER) images
 else
-all: barebox-flash-image barebox-flash-images
+SYMLINK_TARGET_barebox-flash-image = $(KBUILD_IMAGE)
+symlink-y += barebox-flash-image
+all: barebox-flash-images
 endif
+
+all: $(symlink-y)
+
+.SECONDEXPANSION:
+$(symlink-y): $$(or $$(SYMLINK_DEP_$$(@F)),$$(SYMLINK_TARGET_$$(@F))) FORCE
+	@ln -fsn --relative $(SYMLINK_TARGET_$(@F)) $@
 
 common-$(CONFIG_PBL_IMAGE)	+= pbl/
 common-$(CONFIG_DEFAULT_ENVIRONMENT) += defaultenv/
@@ -921,6 +943,7 @@ quiet_cmd_sysmap = SYSMAP  System.map
 # If CONFIG_KALLSYMS is set .version is already updated
 # Generate System.map and verify that the content is consistent
 # Use + in front of the barebox_version rule to silent warning with make -j2
+ifndef rule_barebox__
 define rule_barebox__
 	$(if $(CONFIG_KALLSYMS),,+$(call cmd,barebox_version))
 	$(call cmd,barebox__)
@@ -928,6 +951,7 @@ define rule_barebox__
 	$(call cmd,prelink__)
 	$(call cmd,sysmap)
 endef
+endif
 
 ifdef CONFIG_KALLSYMS
 # Generate section listing all symbols and add it into barebox $(kallsyms.o)
@@ -1024,14 +1048,39 @@ ifeq ($(INSTALL_PATH),)
 endif
 ifdef CONFIG_PBL_IMAGE
 	$(Q)$(MAKE) $(build)=images __images_install
-	@install -t "$(INSTALL_PATH)" barebox.bin
+	@install -t "$(INSTALL_PATH)" $(BAREBOX_PROPER)
 else
 	@install -t "$(INSTALL_PATH)" $(KBUILD_IMAGE)
 endif
 
 PHONY += install
 
+# Testing barebox
+# ---------------------------------------------------------------------------
+# This target has pytest select the YAML env matching CONFIG_NAME if available.
+# Use pytest --lg-env $labgrid_env_yaml directly if you need more than that.
+
+labgrid-env := $(srctree)/test/$(SRCARCH)/$(CONFIG_NAME).yaml
+
+check:
+ifeq ($(CONFIG_NAME),"")
+	@echo "error: can't autoload labgrid env with CONFIG_NAME unset!" >&2
+	@exit 1
+endif
+	@if [ ! -r "$(labgrid-env)" ]; then \
+		echo "error: No Labgrid environment at $(labgrid-env)!" >&2; \
+		echo "Choose a different config (or change CONFIG_NAME)" >&2; \
+		echo "that can be automatically tested" >&2; \
+		exit 1; \
+	fi
+	@echo
+	@# This is intentionally not @suppressed, to make it easier to reproduce
+	(cd $(srctree); $(PYTEST))
+
+PHONY += check
+
 # barebox image
+# ---------------------------------------------------------------------------
 barebox: $(BAREBOX_LDS) $(BAREBOX_OBJS) $(kallsyms.o) FORCE
 	$(call if_changed_rule,barebox__)
 	$(Q)rm -f .old_version
@@ -1041,6 +1090,18 @@ barebox.fit: images/barebox-$(CONFIG_ARCH_LINUX_NAME).fit
 
 barebox.srec: barebox
 	$(OBJCOPY) -O srec $< $@
+
+quiet_cmd_barebox_proper__ = CC      $@
+      cmd_barebox_proper__ = $(CC) -r -o $@ -Wl,--whole-archive $(BAREBOX_OBJS)
+
+.tmp_barebox.o: $(BAREBOX_OBJS) $(kallsyms.o) FORCE
+	$(if $(CONFIG_KALLSYMS),,+$(call cmd,barebox_version))
+	$(call cmd,barebox_proper__)
+	$(Q)echo 'savedcmd_$@ := $(cmd_barebox_proper__)' > $(@D)/.$(@F).cmd
+	$(Q)rm -f .old_version
+
+barebox.o: .tmp_barebox.o FORCE
+	$(call if_changed,objcopy)
 
 # The actual objects are generated when descending,
 # make sure no implicit rule kicks in
@@ -1054,6 +1115,7 @@ $(sort $(BAREBOX_OBJS)) $(BAREBOX_LDS) $(BAREBOX_PBL_OBJS): $(barebox-dirs) ;
 
 PHONY += $(barebox-dirs)
 $(barebox-dirs): prepare scripts
+	@find $(objtree)/$@ -name policy-list -exec rm -f {} \; 2>/dev/null || true
 	$(Q)$(MAKE) $(build)=$@
 
 # Store (new) KERNELRELASE string in include/config/kernel.release
@@ -1146,6 +1208,75 @@ include/generated/utsrelease.h: include/config/kernel.release FORCE
 	$(call filechk,utsrelease.h)
 
 # ---------------------------------------------------------------------------
+# Security policies
+
+ifdef CONFIG_SECURITY_POLICY
+
+.security_config: $(KCONFIG_CONFIG) FORCE
+	+$(call cmd,sconfig,allyesconfig,$@.tmp,$@)
+	$(Q)if [ ! -r $@ ] || ! cmp -s $@.tmp $@; then	\
+		mv -f $@.tmp $@;			\
+	else						\
+		rm -f $@.tmp;				\
+	fi
+
+targets	+= .security_config
+targets += include/generated/security_autoconf.h
+targets += include/generated/sconfig_names.h
+
+KPOLICY = $(shell find $(objtree)/ -name policy-list -exec cat {} \;)
+KPOLICY.tmp = $(addsuffix .tmp,$(KPOLICY))
+
+PHONY += collect-policies
+collect-policies: KBUILD_MODULES :=
+collect-policies: KBUILD_BUILTIN :=
+collect-policies: $(barebox-dirs) FORCE
+
+PHONY += security_listconfigs
+security_listconfigs: collect-policies FORCE
+	@echo policies:
+	@$(foreach p, $(KPOLICY), echo $p ;)
+
+PHONY += security_checkconfigs
+security_checkconfigs: collect-policies $(KPOLICY.tmp) FORCE
+	+$(Q)$(foreach p, $(KPOLICY), \
+		$(call loop_cmd,security_checkconfig,$p.tmp))
+
+security_%config: collect-policies $(KPOLICY.tmp) FORCE
+	+$(Q)$(foreach p, $(KPOLICY), $(call loop_cmd,sconfig, \
+		$(@:security_%=%),$p.tmp))
+ifeq ($(KPOLICY_TMPUPDATE),)
+	+$(Q)$(foreach p, $(KPOLICY), \
+		cp 2>/dev/null $p.tmp $(call resolve-srctree,$p) || true;)
+endif
+
+quiet_cmd_sconfigpost = SCONFPP $@
+      cmd_sconfigpost = $(SCONFIGPOST) $2 -D $(depfile) -o $@ $<
+
+include/generated/security_autoconf.h: .security_config scripts_sconfig FORCE
+	$(call if_changed_dep,sconfigpost,-e)
+
+include/generated/sconfig_names.h: .security_config scripts_sconfig include/generated/security_autoconf.h FORCE
+	$(call if_changed_dep,sconfigpost,-s)
+
+archprepare: include/generated/security_autoconf.h include/generated/sconfig_names.h
+
+else
+
+PHONY += security_%configs security_%config security_disabled
+security_disabled: FORCE
+	@echo "Security policies are disabled. Set CONFIG_SECURITY_POLICY to enable them"
+	@false
+
+security_%configs: security_disabled FORCE
+	@false
+
+security_%config: security_disabled FORCE
+	@false
+
+endif
+
+# ---------------------------------------------------------------------------
 # Devicetree files
 
 ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/dts/),)
@@ -1163,14 +1294,9 @@ ifneq ($(dtstree),)
 
 PHONY += dtbs dtbs_prepare
 dtbs: dtbs_prepare
-	$(Q)$(MAKE) $(build)=$(dtstree) need-dtbslist=1
+	$(Q)$(MAKE) $(build)=$(dtstree)
 
 dtbs_prepare: include/config/kernel.release scripts_dtc
-
-ifdef CONFIG_OFDEVICE
-images: dtbs
-images/%: dtbs
-endif
 
 endif
 
@@ -1261,7 +1387,7 @@ CLEAN_DIRS  += $(MODVERDIR)
 CLEAN_FILES +=	barebox System.map include/generated/barebox_default_env.h \
                 .tmp_version .tmp_barebox* barebox.bin barebox.map \
 		.tmp_kallsyms* barebox.ldr compile_commands.json \
-		barebox-flash-image \
+		.tmp_barebox.o barebox.o barebox-flash-image \
 		barebox.srec barebox.s5p barebox.ubl \
 		barebox.uimage \
 		barebox.efi barebox.canon-a1100.bin
@@ -1273,8 +1399,8 @@ CLEAN_FILES +=	scripts/bareboxenv-target scripts/kernel-install-target \
 
 # Directories & files removed with 'make mrproper'
 MRPROPER_DIRS  += include/config usr/include include/generated Documentation/commands
-MRPROPER_FILES += .config .config.old .version .old_version \
-                  include/config.h           \
+MRPROPER_FILES += .config .config.old .security_config .version .old_version \
+                  include/config.h *.sconfig.old          \
 		  Module.symvers tags TAGS cscope*
 
 # clean - Delete most, but leave enough to build external modules
@@ -1295,7 +1421,8 @@ clean: archclean $(clean-dirs)
 		\( -name '*.[oas]' -o -name '*.ko' -o -name '.*.cmd' \
 		-o -name '.*.d' -o -name '.*.tmp' -o -name '*.mod.c' \
 		-o -name '*lex.c' -o -name '.tab.[ch]' \
-		-o -name 'dtbs-list' \
+		-o -name 'dtbs-list' -o -name 'policy-list' \
+		-o -name '*.sconfig.tmp' -o -name '*.sconfig.[co]' \
 		-o -name '*.symtypes' -o -name '*.bbenv.*' -o -name "*.bbenv" \) \
 		-type f -print | xargs rm -f
 
@@ -1394,6 +1521,24 @@ endif
 	@echo  'Execute "make" or "make all" to build all targets marked with [*] '
 	@echo  'For further info see the documentation'
 
+# Code Coverage
+# ---------------------------------------------------------------------------
+
+barebox.coverage_html: barebox.coverage-info
+	genhtml -o $@ $<
+
+barebox.coverage-info: default.profdata
+	$(COV) export --format=lcov -instr-profile $< $(objtree)/barebox >$@
+
+default.profdata: $(srctree)/default.profraw
+	$(PROFDATA) merge -sparse $< -o $@
+
+# We intentionally don't depend on barebox being built as that can take >10
+# minutes when coverage is enabled
+PHONY += coverage-html
+coverage-html: barebox.coverage_html
+	@echo "HTML coverage generated to $(objtree)/$<"
+
 # Generate tags for editors
 # ---------------------------------------------------------------------------
 quiet_cmd_tags = GEN     $@
@@ -1440,6 +1585,8 @@ target-dir = $(dir $@)
 %.o: %.S prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
 %.symtypes: %.c prepare scripts FORCE
+	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
+%.sconfig.tmp: %.sconfig prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
 
 # Modules

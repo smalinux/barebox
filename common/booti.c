@@ -4,6 +4,7 @@
 #define pr_fmt(fmt) "booti: " fmt
 
 #include <common.h>
+#include <filetype.h>
 #include <memory.h>
 #include <bootm.h>
 #include <linux/sizes.h>
@@ -14,8 +15,7 @@ static unsigned long get_kernel_address(unsigned long os_address,
 	resource_size_t start, end;
 	int ret;
 
-	if (os_address == UIMAGE_SOME_ADDRESS ||
-	    os_address == UIMAGE_INVALID_ADDRESS) {
+	if (!UIMAGE_IS_ADDRESS_VALID(os_address)) {
 		ret = memory_bank_first_find_space(&start, &end);
 		if (ret)
 			return UIMAGE_INVALID_ADDRESS;
@@ -38,13 +38,19 @@ void *booti_load_image(struct image_data *data, phys_addr_t *oftree)
 	int ret;
 	void *fdt;
 
+	print_hex_dump_bytes("header ", DUMP_PREFIX_OFFSET, kernel_header, 80);
+
+	if ((IS_ENABLED(CONFIG_RISCV) && !is_riscv_linux_bootimage(kernel_header)) ||
+	    (IS_ENABLED(CONFIG_ARM64) && !is_arm64_linux_bootimage(kernel_header))) {
+		pr_err("Unexpected magic at offset 0x38!\n");
+		return ERR_PTR(-EINVAL);
+	}
+
 	text_offset = le64_to_cpup(kernel_header + 8);
 	image_size = le64_to_cpup(kernel_header + 16);
 
 	kernel = get_kernel_address(data->os_address, text_offset);
 
-	print_hex_dump_bytes("header ", DUMP_PREFIX_OFFSET,
-			     kernel_header, 80);
 	pr_debug("Kernel to be loaded to %lx+%lx\n", kernel, image_size);
 
 	if (kernel == UIMAGE_INVALID_ADDRESS)
@@ -73,9 +79,13 @@ void *booti_load_image(struct image_data *data, phys_addr_t *oftree)
 		fdt = bootm_get_devicetree(data);
 		if (IS_ERR(fdt))
 			return fdt;
+		if (!fdt) {
+			if (initrd_res)
+				pr_warn("initrd discarded due to missing devicetree.\n");
+			goto out;
+		}
 
 		ret = bootm_load_devicetree(data, fdt, devicetree);
-
 		free(fdt);
 
 		if (ret)
@@ -84,8 +94,9 @@ void *booti_load_image(struct image_data *data, phys_addr_t *oftree)
 		*oftree = devicetree;
 	}
 
+out:
 	printf("Loaded kernel to 0x%08lx", kernel);
-	if (oftree)
+	if (oftree && *oftree)
 		printf(", devicetree at %pa", oftree);
 	printf("\n");
 

@@ -12,6 +12,7 @@
 #include <asm/ptrace.h>
 #include <asm/barebox-arm.h>
 #include <asm/unwind.h>
+#include <asm/system_info.h>
 #include <init.h>
 
 /* Avoid missing prototype warning, called from assembly */
@@ -61,13 +62,16 @@ void show_regs (struct pt_regs *regs)
 		fast_interrupts_enabled (regs) ? "on" : "off",
 		processor_modes[processor_mode (regs)],
 		thumb_mode (regs) ? " (T)" : "");
-#ifdef CONFIG_ARM_UNWIND
+#if defined CONFIG_ARM_UNWIND && IN_PROPER
 	unwind_backtrace(regs);
 #endif
 }
 
-static void __noreturn do_exception(struct pt_regs *pt_regs)
+static void __noreturn do_exception(const char *reason, struct pt_regs *pt_regs)
 {
+	if (reason)
+		eprintf("PANIC: unable to handle %s\n", reason);
+
 	show_regs(pt_regs);
 
 	panic_no_stacktrace("");
@@ -79,8 +83,7 @@ static void __noreturn do_exception(struct pt_regs *pt_regs)
  */
 void do_undefined_instruction (struct pt_regs *pt_regs)
 {
-	eprintf("undefined instruction\n");
-	do_exception(pt_regs);
+	do_exception("undefined instruction", pt_regs);
 }
 
 /**
@@ -92,8 +95,7 @@ void do_undefined_instruction (struct pt_regs *pt_regs)
  */
 void do_software_interrupt (struct pt_regs *pt_regs)
 {
-	eprintf("software interrupt\n");
-	do_exception(pt_regs);
+	do_exception("software interrupt", pt_regs);
 }
 
 /**
@@ -104,22 +106,15 @@ void do_software_interrupt (struct pt_regs *pt_regs)
  */
 void do_prefetch_abort (struct pt_regs *pt_regs)
 {
-	eprintf("prefetch abort\n");
-	do_exception(pt_regs);
+	do_exception("prefetch abort", pt_regs);
 }
 
 static const char *data_abort_reason(ulong far)
 {
-	ulong guard_page;
-
 	if (far < PAGE_SIZE)
 		return "NULL pointer dereference";
-
-	if (IS_ENABLED(CONFIG_STACK_GUARD_PAGE)) {
-		guard_page = arm_mem_guard_page_get();
-		if (guard_page <= far && far < guard_page + PAGE_SIZE)
-			return "stack overflow";
-	}
+	if (inside_stack_guard_page(far))
+		return "stack overflow";
 
 	return "paging request";
 }
@@ -136,10 +131,10 @@ void do_data_abort (struct pt_regs *pt_regs)
 
 	asm volatile ("mrc     p15, 0, %0, c6, c0, 0" : "=r" (far) : : "cc");
 
-	eprintf("unable to handle %s at address 0x%08x\n",
+	eprintf("PANIC: unable to handle %s at address 0x%08x\n",
 		data_abort_reason(far), far);
 
-	do_exception(pt_regs);
+	do_exception(NULL, pt_regs);
 }
 
 /**
@@ -150,8 +145,7 @@ void do_data_abort (struct pt_regs *pt_regs)
  */
 void do_fiq (struct pt_regs *pt_regs)
 {
-	eprintf("fast interrupt request\n");
-	do_exception(pt_regs);
+	do_exception("fast interrupt request", pt_regs);
 }
 
 /**
@@ -162,8 +156,7 @@ void do_fiq (struct pt_regs *pt_regs)
  */
 void do_irq (struct pt_regs *pt_regs)
 {
-	eprintf("interrupt request\n");
-	do_exception(pt_regs);
+	do_exception("interrupt request", pt_regs);
 }
 
 extern volatile int arm_ignore_data_abort;
@@ -181,3 +174,14 @@ int data_abort_unmask(void)
 
 	return arm_data_abort_occurred != 0;
 }
+
+#if IS_ENABLED(CONFIG_ARM_EXCEPTIONS_PBL)
+void arm_pbl_init_exceptions(void)
+{
+	if (cpu_architecture() < CPU_ARCH_ARMv7)
+		return;
+
+	set_vbar((unsigned long)__exceptions_start);
+	arm_fixup_vectors();
+}
+#endif

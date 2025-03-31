@@ -30,6 +30,9 @@
 *.patch
 *.pyc
 *.s
+*.sconfig.c
+*.sconfig.old
+*.sconfig.tmp
 *.so
 *.so.dbg
 *.symtypes
@@ -37,6 +40,7 @@
 binary.0
 Module.symvers
 dtbs-list
+policy-list
 *.dtb
 *.dtb.*
 *.dtbo
@@ -49,6 +53,9 @@ dtbs-list
 /TAGS
 /barebox*
 /System.map
+/build
+/oe-logs
+/oe-workdir
 
 #
 # git files that we don't want to ignore even it they are dot-files
@@ -98,3 +105,9 @@ GTAGS
 /allrandom.config
 /allyes.config
 /compile_commands.json
+
+# coverage data
+default.profdata
+default.profraw
+coverage.info
+coverage_html/

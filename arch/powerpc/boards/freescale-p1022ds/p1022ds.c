@@ -108,6 +108,7 @@ static int p1022ds_devices_init(void)
 				    "self0");
 	devfs_add_partition("nor0", 0x7f00000, 0x10000, DEVFS_PARTITION_FIXED,
 				    "env0");
+	default_environment_path_set("/dev/env0");
 	add_generic_device("i2c-fsl", 0, NULL, I2C1_BASE_ADDR, 0x100,
 			IORESOURCE_MEM, &i2cplat[0]);
 	add_generic_device("i2c-fsl", 1, NULL, I2C2_BASE_ADDR, 0x100,
@@ -164,8 +165,7 @@ static int p1022ds_board_init_r(void)
 	fsl_set_lbc_or(1, 0xffff8796);
 
 	/* Flush d-cache and invalidate i-cache of any FLASH data */
-	flush_dcache();
-	invalidate_icache();
+	sync_caches_for_execution();
 
 	/* invalidate existing TLB entry for flash */
 	e500_disable_tlb(flash_esel);

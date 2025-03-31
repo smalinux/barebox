@@ -24,9 +24,8 @@
 #include <driver.h>
 #include <init.h>
 
-#define DEFAULT_TWI_CLK_HZ		100000		/* max 400 Kbits/s */
-#define AT91_I2C_TIMEOUT		(100 * MSECOND)	/* transfer timeout */
-#define AT91_I2C_DMA_THRESHOLD	8			/* enable DMA if transfer size is bigger than this threshold */
+#define AT91_I2C_TIMEOUT	(100 * MSECOND)	/* transfer timeout */
+#define AT91_I2C_DMA_THRESHOLD	8		/* enable DMA if transfer size is bigger than this threshold */
 
 /* AT91 TWI register definitions */
 #define	AT91_TWI_CR		0x0000	/* Control Register */
@@ -91,7 +90,7 @@ struct at91_twi_dev {
 	unsigned transfer_status;
 	struct i2c_adapter adapter;
 	unsigned twi_cwgr_reg;
-	struct at91_twi_pdata *pdata;
+	const struct at91_twi_pdata *pdata;
 	u32 filter_width;
 
 	bool enable_dig_filt;
@@ -118,7 +117,7 @@ static void at91_disable_twi_interrupts(struct at91_twi_dev *dev)
 
 static void at91_init_twi_bus(struct at91_twi_dev *dev)
 {
-	struct at91_twi_pdata *pdata = dev->pdata;
+	const struct at91_twi_pdata *pdata = dev->pdata;
 	u32 filtr = 0;
 
 	at91_disable_twi_interrupts(dev);
@@ -149,10 +148,10 @@ static void at91_init_twi_bus(struct at91_twi_dev *dev)
  * Calculate symmetric clock as stated in datasheet:
  * twi_clk = F_MAIN / (2 * (cdiv * (1 << ckdiv) + offset))
  */
-static void at91_calc_twi_clock(struct at91_twi_dev *dev, int twi_clk)
+static void at91_calc_twi_clock(struct at91_twi_dev *dev)
 {
 	int ckdiv, cdiv, div, hold = 0, filter_width = 0;
-	struct at91_twi_pdata *pdata = dev->pdata;
+	const struct at91_twi_pdata *pdata = dev->pdata;
 	int offset = pdata->clk_offset;
 	int max_ckdiv = pdata->clk_max_div;
 	struct i2c_timings timings, *t = &timings;
@@ -160,7 +159,7 @@ static void at91_calc_twi_clock(struct at91_twi_dev *dev, int twi_clk)
 	i2c_parse_fw_timings(dev->dev, t, true);
 
 	div = max(0, (int)DIV_ROUND_UP(clk_get_rate(dev->clk),
-				       2 * twi_clk) - offset);
+				       2 * t->bus_freq_hz) - offset);
 	ckdiv = fls(div >> 8);
 	cdiv = div >> ckdiv;
 
@@ -517,18 +516,15 @@ static int at91_twi_probe(struct device *dev)
 {
 	struct resource *iores;
 	struct at91_twi_dev *i2c_at91;
-	struct at91_twi_pdata *i2c_data;
+	const struct at91_twi_pdata *i2c_data;
 	int rc = 0;
-	u32 bus_clk_rate;
+
+	i2c_data = device_get_match_data(dev);
+	if (!i2c_data)
+		return -ENODEV;
 
 	i2c_at91 = xzalloc(sizeof(struct at91_twi_dev));
 	i2c_at91->dev = dev;
-
-	rc = dev_get_drvdata(dev, (const void **)&i2c_data);
-	if (rc < 0) {
-		dev_err(dev, "failed to retrieve driver data\n");
-		goto out_free;
-	}
 
 	i2c_at91->pdata = i2c_data;
 
@@ -551,9 +547,7 @@ static int at91_twi_probe(struct device *dev)
 
 	clk_enable(i2c_at91->clk);
 
-	bus_clk_rate = DEFAULT_TWI_CLK_HZ;
-
-	at91_calc_twi_clock(i2c_at91, bus_clk_rate);
+	at91_calc_twi_clock(i2c_at91);
 	at91_init_twi_bus(i2c_at91);
 
 	i2c_at91->adapter.master_xfer = at91_twi_xfer;

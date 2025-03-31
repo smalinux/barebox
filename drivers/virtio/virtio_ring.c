@@ -13,6 +13,7 @@
 #include <linux/virtio_types.h>
 #include <linux/virtio.h>
 #include <linux/virtio_ring.h>
+#include <linux/ktime.h>
 #include <linux/bug.h>
 #include <dma.h>
 
@@ -240,10 +241,8 @@ void *virtqueue_get_buf(struct virtqueue *vq, unsigned int *len)
 	u16 last_used;
 	void *ret;
 
-	if (!more_used(vq)) {
-		vq_debug(vq, "No more buffers in queue\n");
+	if (!more_used(vq))
 		return NULL;
-	}
 
 	/* Only get used array entries after they have been exposed by host */
 	virtio_rmb();
@@ -274,6 +273,20 @@ void *virtqueue_get_buf(struct virtqueue *vq, unsigned int *len)
 				cpu_to_virtio16(vq->vdev, vq->last_used_idx));
 
 	return ret;
+}
+
+void *virtqueue_get_buf_timeout(struct virtqueue *vq, unsigned int *len,
+				ktime_t timeout)
+{
+	ktime_t start = get_time_ns();
+
+	do {
+		void *ret = virtqueue_get_buf(vq, len);
+		if (ret)
+			return ret;
+	} while (!is_timeout(start, timeout));
+
+	return NULL;
 }
 
 static struct virtqueue *__vring_new_virtqueue(unsigned int index,

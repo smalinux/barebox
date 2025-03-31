@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: (GPL-2.0-or-later OR MIT)
 
-/{
+/ {
+	barebox,deep-probe;
+
 	chosen {
 		environment-spi-nor {
 			compatible = "barebox,environment";
@@ -15,6 +17,9 @@
 		reg = <0x25>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_pca9451>;
+		regulators {
+			barebox,allow-dummy-supply;
+		};
 	};
 };
 

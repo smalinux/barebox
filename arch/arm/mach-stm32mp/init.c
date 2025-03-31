@@ -13,6 +13,7 @@
 #include <mach/stm32mp/revision.h>
 #include <mach/stm32mp/bootsource.h>
 #include <bootsource.h>
+#include <fiptool.h>
 #include <dt-bindings/pinctrl/stm32-pinfunc.h>
 
 /* Package = bit 27:29 of OTP16
@@ -229,29 +230,40 @@ static int stm32mp15_setup_cpu_type(void)
 	return 0;
 }
 
-static int __st32mp_soc;
+static unsigned __st32mp_soc;
 
-int stm32mp_soc(void)
+unsigned stm32mp_soc_code(void)
 {
 	return __st32mp_soc;
 }
+
+static const struct fip_binding stm32mp_fip_handler[] = {
+	{  1, UUID_FW_CONFIG },
+	{  2, UUID_HW_CONFIG },
+	{  5, UUID_NON_TRUSTED_FIRMWARE_BL33 },
+	{ /* sentinel */ }
+};
 
 static int stm32mp_init(void)
 {
 	u32 boot_ctx;
 
-	if (of_machine_is_compatible("st,stm32mp135"))
-		__st32mp_soc = 32135;
+	if (of_machine_is_compatible("st,stm32mp131"))
+		__st32mp_soc = 0x32131;
+	else if (of_machine_is_compatible("st,stm32mp133"))
+		__st32mp_soc = 0x32133;
+	else if (of_machine_is_compatible("st,stm32mp135"))
+		__st32mp_soc = 0x32135;
 	else if (of_machine_is_compatible("st,stm32mp151"))
-		__st32mp_soc = 32151;
+		__st32mp_soc = 0x32151;
 	else if (of_machine_is_compatible("st,stm32mp153"))
-		__st32mp_soc = 32153;
+		__st32mp_soc = 0x32153;
 	else if (of_machine_is_compatible("st,stm32mp157"))
-		__st32mp_soc = 32157;
+		__st32mp_soc = 0x32157;
 	else
 		return 0;
 
-	if (__st32mp_soc == 32135) {
+	if ((__st32mp_soc & 0xFF0) == 0x130) {
 		boot_ctx = readl(STM32MP13_TAMP_BOOT_CONTEXT);
 	} else {
 		stm32mp15_setup_cpu_type();
@@ -259,6 +271,8 @@ static int stm32mp_init(void)
 	}
 
 	setup_boot_mode(boot_ctx);
+
+	plat_set_fip_bindings(stm32mp_fip_handler);
 
 	return 0;
 }

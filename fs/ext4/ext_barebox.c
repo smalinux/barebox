@@ -35,8 +35,8 @@ ssize_t ext4fs_devread(struct ext_filesystem *fs, sector_t __sector, int byte_of
 
 	size = cdev_read(fs->cdev, buf, byte_len, sector * SECTOR_SIZE + byte_offset, 0);
 	if (size < 0) {
-		dev_err(fs->dev, "read error at sector %llu: %s\n", __sector,
-				strerror(-size));
+		dev_err(fs->dev, "read error at sector %llu: %pe\n", __sector,
+			ERR_PTR(size));
 		return size;
 	}
 
@@ -48,7 +48,7 @@ static inline struct ext2fs_node *to_ext2_node(struct inode *inode)
 	return container_of(inode, struct ext2fs_node, i);
 }
 
-static int ext_read(struct device *_dev, struct file *f, void *buf, size_t insize)
+static int ext_read(struct file *f, void *buf, size_t insize)
 {
 	struct inode *inode = f->f_inode;
 	struct ext2fs_node *node = to_ext2_node(inode);
@@ -179,6 +179,10 @@ const struct file_operations ext_dir_operations = {
 	.iterate = ext_iterate,
 };
 
+const struct file_operations ext_file_operations = {
+	.read = ext_read,
+};
+
 static const char *ext_get_link(struct dentry *dentry, struct inode *inode)
 {
 	struct ext2fs_node *node = to_ext2_node(inode);
@@ -230,6 +234,7 @@ struct inode *ext_get_inode(struct super_block *sb, int ino)
 		return NULL;
 	case S_IFREG:
 		inode->i_op = &ext_inode_operations;
+		inode->i_fop = &ext_file_operations;
 		break;
 	case S_IFDIR:
 		inode->i_op = &ext_inode_operations;
@@ -299,7 +304,6 @@ static void ext_remove(struct device *dev)
 }
 
 static struct fs_driver ext_driver = {
-	.read      = ext_read,
 	.type      = filetype_ext,
 	.drv = {
 		.probe  = ext_probe,

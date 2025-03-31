@@ -17,8 +17,7 @@
 void efi_main(efi_handle_t image, struct efi_system_table *sys_table)
 {
 	efi_status_t efiret;
-	size_t memsize;
-	efi_physical_addr_t mem;
+	void *mem;
 
 #ifdef DEBUG
 	sys_table->con_out->output_string(sys_table->con_out, L"barebox\n");
@@ -37,9 +36,9 @@ void efi_main(efi_handle_t image, struct efi_system_table *sys_table)
 		BS->handle_protocol(efi_loaded_image->device_handle,
 				&efi_device_path_protocol_guid, (void **)&efi_device_path);
 
-	mem = efi_earlymem_alloc(sys_table, &memsize);
+	mem = efi_earlymem_alloc(sys_table, SZ_16M, EFI_BOOT_SERVICES_DATA);
 
-	mem_malloc_init((void *)mem, (void *)mem + memsize - 1);
+	mem_malloc_init(mem, mem + SZ_16M - 1);
 
 	start_barebox();
 }

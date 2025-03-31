@@ -201,6 +201,7 @@ config GPIO_TEGRA
 
 config GPIO_DESIGNWARE
 	tristate "Synopsys DesignWare GPIO driver"
+	depends on OF_GPIO
 	help
 	  Say Y or M here to build support for the Synopsys DesignWare APB
 	  GPIO block.
@@ -229,7 +230,7 @@ config GPIO_STARFIVE
 
 config GPIO_LIBFTDI1
 	bool "libftdi1 driver"
-	depends on SANDBOX
+	depends on HAVE_LIBFTDI1
 
 config GPIO_ZYNQ
 	tristate "Xilinx Zynq GPIO support"

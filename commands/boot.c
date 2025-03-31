@@ -43,7 +43,7 @@ static int boot_add_override(struct bootm_overrides *overrides, char *var)
 	if (!strcmp(var, "bootm.image")) {
 		if (isempty(val))
 			return -EINVAL;
-		overrides->os_file = val;
+		return -ENOSYS;
 	} else if (!strcmp(var, "bootm.oftree")) {
 		overrides->oftree_file = val;
 	} else if (!strcmp(var, "bootm.initrd")) {
@@ -53,11 +53,6 @@ static int boot_add_override(struct bootm_overrides *overrides, char *var)
 	}
 
 	return 0;
-}
-
-static inline bool boot_has_overrides(const struct bootm_overrides *overrides)
-{
-	return overrides->os_file || overrides->oftree_file || overrides->initrd_file;
 }
 
 static int do_boot(int argc, char *argv[])
@@ -128,8 +123,6 @@ static int do_boot(int argc, char *argv[])
 	}
 
 	entries = bootentries_alloc();
-	if (boot_has_overrides(&overrides))
-		bootm_set_overrides(&overrides);
 
 	while ((name = next(&handle)) != NULL) {
 		if (!*name)
@@ -142,6 +135,8 @@ static int do_boot(int argc, char *argv[])
 			continue;
 
 		bootentries_for_each_entry(entries, entry) {
+			bootm_merge_overrides(&entry->overrides, &overrides);
+
 			ret = boot_entry(entry, verbose, dryrun);
 			if (!ret)
 				goto out;
@@ -164,8 +159,6 @@ static int do_boot(int argc, char *argv[])
 
 	ret = 0;
 out:
-	if (boot_has_overrides(&overrides))
-		bootm_unset_overrides();
 	bootentries_free(entries);
 	free(freep);
 
@@ -186,6 +179,13 @@ BAREBOX_CMD_HELP_TEXT("- a partition name under /dev/")
 BAREBOX_CMD_HELP_TEXT("- a full path to a directory which")
 BAREBOX_CMD_HELP_TEXT("   - contains boot scripts, or")
 BAREBOX_CMD_HELP_TEXT("   - contains a loader/entries/ directory containing bootspec entries")
+#ifdef CONFIG_BOOTCHOOSER
+BAREBOX_CMD_HELP_TEXT("- \"bootchooser\": boot with barebox bootchooser")
+#endif
+#ifdef CONFIG_BOOT_DEFAULTS
+BAREBOX_CMD_HELP_TEXT("- \"bootsource\": boot from the device barebox has been started from")
+BAREBOX_CMD_HELP_TEXT("- \"diskuuid.*\": boot from disk with specified diskuuid")
+#endif
 BAREBOX_CMD_HELP_TEXT("")
 BAREBOX_CMD_HELP_TEXT("Multiple bootsources may be given which are probed in order until")
 BAREBOX_CMD_HELP_TEXT("one succeeds.")
@@ -198,7 +198,7 @@ BAREBOX_CMD_HELP_OPT ("-m","Show a menu with boot options")
 BAREBOX_CMD_HELP_OPT ("-M INDEX","Show a menu with boot options with entry INDEX preselected")
 BAREBOX_CMD_HELP_OPT ("-w SECS","Start watchdog with timeout SECS before booting")
 #ifdef CONFIG_BOOT_OVERRIDE
-BAREBOX_CMD_HELP_OPT ("-o VAR[=VAL]","override VAR (bootm.{image,oftree,initrd}) with VAL")
+BAREBOX_CMD_HELP_OPT ("-o VAR[=VAL]","override VAR (bootm.{oftree,initrd}) with VAL")
 BAREBOX_CMD_HELP_OPT ("            ","if VAL is not specified, the value of VAR is taken")
 #endif
 BAREBOX_CMD_HELP_OPT ("-t SECS","specify timeout in SECS")

@@ -14,6 +14,7 @@
 
 #include <errno.h>
 #include <linux/list.h>
+#include <linux/gfp.h>
 
 struct idr {
 	int			id;
@@ -36,10 +37,11 @@ struct idr {
  */
 #define idr_for_each_entry(_idr, _entry, _id)				\
 	for (struct idr *iter =						\
-	     list_first_entry_or_null(&(_idr)->list, struct idr, list);	\
-	     (iter && iter != (_idr)) || (_entry = NULL);	\
-	     iter = list_next_entry(iter, list))			\
-	if ((_entry = iter->ptr, _id = iter->id, true))
+	     list_first_entry_or_null(&(_idr)->list, struct idr, list), \
+	     *tmp = iter ? list_next_entry(iter, list) : NULL;		\
+	     (iter && iter != (_idr)) || (_entry = NULL);		\
+	     iter = tmp, tmp = tmp ?  list_next_entry(tmp, list) : NULL)\
+	if ((_entry = iter->ptr, _id = iter->id, false)) {} else
 
 struct idr *__idr_find(struct idr *head, int lookup_id);
 
@@ -58,7 +60,12 @@ static inline void *idr_find(struct idr *head, int id)
 	return idr ? idr->ptr : NULL;
 }
 
-int idr_alloc_one(struct idr *head, void *ptr, int start);
+static inline void idr_preload(gfp_t gfp_mask) {}
+static inline void idr_preload_end(void) {}
+
+int idr_alloc(struct idr *, void *ptr, int start, int end, gfp_t);
+int __must_check idr_alloc_u32(struct idr *, void *ptr, u32 *id,
+				unsigned long max, gfp_t);
 
 static inline void idr_init(struct idr *idr)
 {

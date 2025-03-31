@@ -14,7 +14,21 @@
 #include <linux/clk/clk-conf.h>
 #include <pinctrl.h>
 
+#include "clk-fixed.h"
+
 static LIST_HEAD(clks);
+
+bool clk_have_nonfixed_providers(void)
+{
+	struct clk *c;
+
+	list_for_each_entry(c, &clks, list) {
+		if (!clk_is_fixed(c))
+			return true;
+	}
+
+	return false;
+}
 
 static int clk_parent_enable(struct clk *clk)
 {
@@ -80,7 +94,7 @@ void clk_disable(struct clk *clk)
 		return;
 
 	if (clk->enable_count == 1 && clk->flags & CLK_IS_CRITICAL) {
-		pr_warn("Disabling critical clock %s\n", clk->name);
+		pr_warn("Disabling critical clock %pC\n", clk);
 		return;
 	}
 
@@ -160,7 +174,7 @@ int clk_set_rate(struct clk *clk, unsigned long rate)
 {
 	struct clk_hw *hw;
 	struct clk *parent;
-	unsigned long parent_rate = 0;
+	unsigned long parent_rate = 0, current_rate;
 	int ret;
 
 	if (!clk)
@@ -169,8 +183,15 @@ int clk_set_rate(struct clk *clk, unsigned long rate)
 	if (IS_ERR(clk))
 		return PTR_ERR(clk);
 
-	if (clk_get_rate(clk) == clk_round_rate(clk, rate))
-		return 0;
+	current_rate = clk_get_rate(clk);
+
+	if (clk->ops->round_rate) {
+		if (current_rate == clk_round_rate(clk, rate))
+			return 0;
+	} else {
+		if (current_rate == rate)
+			return 0;
+	}
 
 	if (!clk->ops->set_rate)
 		return -ENOSYS;
@@ -280,6 +301,9 @@ int clk_set_parent(struct clk *clk, struct clk *newparent)
 		return PTR_ERR(clk);
 	if (IS_ERR(newparent))
 		return PTR_ERR(newparent);
+
+	if (newparent == curparent)
+		return 0;
 
 	if (!clk->num_parents)
 		return -EINVAL;
@@ -439,8 +463,8 @@ static int __bclk_register(struct clk *clk)
 
 	list_for_each_entry(c, &clks, list) {
 		if (!strcmp(c->name, clk->name)) {
-			pr_err("%s clk %s is already registered, skipping!\n",
-				__func__, clk->name);
+			pr_err("%s clk %pC is already registered, skipping!\n",
+				__func__, clk);
 			return -EBUSY;
 		}
 	}
@@ -476,11 +500,26 @@ int bclk_register(struct clk *clk)
 	return ret;
 }
 
+static int clk_cpy_name(const char **dst_p, const char *src, bool must_exist)
+{
+	const char *dst;
+
+	if (!src) {
+		if (must_exist)
+			return -EINVAL;
+		return 0;
+	}
+
+	*dst_p = dst = xstrdup(src);
+
+	return 0;
+}
+
 struct clk *clk_register(struct device *dev, struct clk_hw *hw)
 {
 	struct clk *clk;
 	const struct clk_init_data *init = hw->init;
-	char **parent_names = NULL;
+	const char **parent_names = NULL;
 	int i, ret;
 
 	if (!hw->init)
@@ -496,14 +535,34 @@ struct clk *clk_register(struct device *dev, struct clk_hw *hw)
 
 	clk->parents = xzalloc(sizeof(struct clk *) * clk->num_parents);
 
-	if (init->parent_names) {
+	if (init->parent_names || init->parent_data) {
 		parent_names = xzalloc(init->num_parents * sizeof(char *));
 
-		for (i = 0; i < init->num_parents; i++)
-			parent_names[i] = xstrdup(init->parent_names[i]);
-
-		clk->parent_names = (const char *const*)parent_names;
-
+		for (i = 0; i < init->num_parents; i++) {
+			if (init->parent_names) {
+				ret = clk_cpy_name(&parent_names[i],
+						   init->parent_names[i], true);
+				if (ret)
+					return ERR_PTR(ret);
+			} else if (init->parent_data) {
+				/* Linux copies fw_name and if successful also name.
+				 * As fw_name is not handled in barebox, just copy the
+				 * name field and fallback to hw->clk.name if it doesn't
+				 * exist.
+				 */
+				ret = clk_cpy_name(&parent_names[i],
+						   init->parent_data[i].name,
+						   true);
+				if (ret) {
+					ret = clk_cpy_name(&parent_names[i],
+							   init->parent_data[i].hw->clk.name,
+							   false);
+					if (ret)
+						return ERR_PTR(ret);
+				}
+			}
+		}
+		clk->parent_names = (const char *const *)parent_names;
 	} else {
 		for (i = 0; i < init->num_parents; i++)
 			clk->parents[i] = clk_hw_to_clk(init->parent_hws[i]);
@@ -515,7 +574,7 @@ struct clk *clk_register(struct device *dev, struct clk_hw *hw)
 	if (ret) {
 		if (parent_names) {
 			for (i = 0; i < init->num_parents; i++)
-				free(parent_names[i]);
+				free_const(parent_names[i]);
 			free(parent_names);
 		}
 		free(clk->parents);
@@ -1039,8 +1098,8 @@ static void dump_one_summary(struct clk *clk, int flags, int indent)
 	else
 		stat = "enabled";
 
-	printf("%*s%s (rate %lu, enable_count: %d, %s)\n", indent * 4, "",
-	       clk->name,
+	printf("%*s%pC (rate %lu, enable_count: %d, %s)\n", indent * 4, "",
+	       clk,
 	       clk_get_rate(clk),
 	       clk->enable_count,
 	       hwstat);
@@ -1059,8 +1118,8 @@ static void dump_one_summary(struct clk *clk, int flags, int indent)
 
 static void dump_one_json(struct clk *clk, int flags, int indent)
 {
-	printf("\"%s\": { \"rate\": %lu,\"enable_count\": %d",
-	       clk->name,
+	printf("\"%pC\": { \"rate\": %lu,\"enable_count\": %d",
+	       clk,
 	       clk_get_rate(clk),
 	       clk->enable_count);
 }

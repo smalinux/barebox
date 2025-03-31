@@ -4,7 +4,7 @@
  *
  * Support for SDHCI device on bcm2835
  * Based on sdhci-bcm2708.c (c) 2010 Broadcom
- * Inspired by bcm2835_sdhci.c from git://github.com/gonzoua/u-boot-pi.git
+ * Inspired by bcm2835_sdhci.c from https://github.com/gonzoua/u-boot-pi.git
  *
  * Portions (e.g. read/write macros, concepts for back-to-back register write
  * timing workarounds) obviously extracted from the Linux kernel at:
@@ -129,7 +129,7 @@ static int bcm2835_mci_request(struct mci_host *mci, struct mci_cmd *cmd,
 	}
 
 	/* BCM2xxx SDHCI might take up to 100ms to complete a command */
-	cmd->busy_timeout = 100;
+	cmd->busy_timeout = max(cmd->busy_timeout, 100U);
 
 	ret = sdhci_wait_idle_data(&host->sdhci, cmd);
 	if (ret)
@@ -158,7 +158,7 @@ static int bcm2835_mci_request(struct mci_host *mci, struct mci_cmd *cmd,
 	}
 
 	if (!ret && data)
-		ret = sdhci_transfer_data_pio(&host->sdhci, data);
+		ret = sdhci_transfer_data_pio(&host->sdhci, cmd, data);
 
 	sdhci_write32(&host->sdhci, SDHCI_INT_STATUS, 0xFFFFFFFF);
 	if (ret) {

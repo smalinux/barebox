@@ -33,8 +33,7 @@ char *squashfs_devread(struct squashfs_sb_info *fs, int byte_offset,
 
 	size = cdev_read(fs->cdev, buf, byte_len, byte_offset, 0);
 	if (size < 0) {
-		dev_err(fs->dev, "read error: %s\n",
-				strerror(-size));
+		dev_err(fs->dev, "read error: %pe\n", ERR_PTR(size));
 		return NULL;
 	}
 
@@ -177,11 +176,6 @@ static int squashfs_close(struct inode *inode, struct file *f)
 	return 0;
 }
 
-const struct file_operations squashfs_file_operations = {
-	.open = squashfs_open,
-	.release = squashfs_close,
-};
-
 static int squashfs_read_buf(struct squashfs_page *page, int pos, void **buf)
 {
 	unsigned int data_block = pos / (32 * PAGE_CACHE_SIZE);
@@ -200,8 +194,7 @@ static int squashfs_read_buf(struct squashfs_page *page, int pos, void **buf)
 	return 0;
 }
 
-static int squashfs_read(struct device *_dev, struct file *f, void *buf,
-			 size_t insize)
+static int squashfs_read(struct file *f, void *buf, size_t insize)
 {
 	unsigned int size = insize;
 	unsigned int pos = f->f_pos;
@@ -243,19 +236,13 @@ static int squashfs_read(struct device *_dev, struct file *f, void *buf,
 	return insize;
 }
 
-struct squashfs_dir {
-	struct file file;
-	struct dentry dentry;
-	struct dentry root_dentry;
-	struct inode inode;
-	struct qstr nm;
-	DIR dir;
-	char d_name[256];
-	char root_d_name[256];
+const struct file_operations squashfs_file_operations = {
+	.open = squashfs_open,
+	.release = squashfs_close,
+	.read = squashfs_read,
 };
 
 static struct fs_driver squashfs_driver = {
-	.read		= squashfs_read,
 	.type		= filetype_squashfs,
 	.drv = {
 		.probe = squashfs_probe,

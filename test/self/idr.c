@@ -42,6 +42,11 @@ static int count_idr(int id, void *p, void *data)
 	return 0;
 }
 
+static inline int idr_alloc_one(struct idr *idr, void *ptr, int id)
+{
+	return idr_alloc_u32(idr, ptr, &id, id + 1, GFP_KERNEL) ?: id;
+}
+
 static void test_idr(void)
 {
 	void *ptr;
@@ -68,9 +73,17 @@ static void test_idr(void)
 	id = idr_alloc_one(&idr, &cmp[2], cmp[2]);
 	expect(id == cmp[2]);
 
+	id = idr_alloc_one(&idr, NULL, 4);
+	expect(id == 4);
+
 	count = 0;
 
 	idr_for_each_entry(&idr, ptr, id) {
+		if (id == 4) {
+			idr_remove(&idr, 4);
+			continue;
+		}
+
 		expect(id  ==  sorted_cmp[count]);
 		expect(*(int *)ptr == sorted_cmp[count]);
 

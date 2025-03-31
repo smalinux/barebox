@@ -3,6 +3,7 @@
 #define __STRINGLIST_H
 
 #include <linux/list.h>
+#include <linux/string.h>
 #include <malloc.h>
 
 struct string_list {
@@ -11,7 +12,8 @@ struct string_list {
 };
 
 int string_list_add(struct string_list *sl, const char *str);
-int string_list_add_asprintf(struct string_list *sl, const char *fmt, ...);
+int string_list_add_asprintf(struct string_list *sl, const char *fmt, ...)
+	__printf(2, 3);
 int string_list_add_sorted(struct string_list *sl, const char *str);
 int string_list_add_sort_uniq(struct string_list *sl, const char *str);
 int string_list_contains(struct string_list *sl, const char *str);
@@ -24,6 +26,16 @@ static inline void string_list_init(struct string_list *sl)
 	sl->str = NULL;
 }
 
+static inline size_t string_list_empty(struct string_list *sl)
+{
+	return list_empty(&sl->list);
+}
+
+static inline size_t string_list_count(struct string_list *sl)
+{
+	return list_count_nodes(&sl->list);
+}
+
 static inline void string_list_free(struct string_list *sl)
 {
 	struct string_list *entry, *safe;
@@ -32,6 +44,12 @@ static inline void string_list_free(struct string_list *sl)
 		free_const(entry->str);
 		free(entry);
 	}
+}
+
+static inline void string_list_reinit(struct string_list *sl)
+{
+	string_list_free(sl);
+	string_list_init(sl);
 }
 
 #define string_list_for_each_entry(entry, sl) \

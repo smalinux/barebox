@@ -3,6 +3,12 @@
 menu "K3 boards"
         depends on ARCH_K3
 
+config MACH_AM62X
+	bool
+
+config MACH_AM62LX
+	bool
+
 config MACH_K3_CORTEX_R5
 	bool
 	select CPU_V7
@@ -18,7 +24,6 @@ config MACH_K3_CORTEX_R5
 	select FIP
 	select HAVE_FIRMWARE_VERIFY_NEXT_IMAGE
 	depends on 32BIT
-	select ARM_USE_COMPRESSED_DTB
 	select HAS_INSECURE_DEFAULTS if (!FIRMWARE_VERIFY_NEXT_IMAGE && !ARCH_K3_AUTHENTICATE_IMAGE)
 	default y
 
@@ -30,13 +35,21 @@ config MACH_K3_CORTEX_A
 
 config MACH_AM625_SK
 	bool "TI AM625 SK"
+	select MACH_AM62X
 	help
 	  Say Y here if you are using a TI AM625 SK board
 
 config MACH_BEAGLEPLAY
 	bool "BeagleBoard BeaglePlay"
+	select MACH_AM62X
 	help
 	  Say Y here if you are using a TI AM62x based BeaglePlay board
+
+config MACH_AM62LX_EVM
+	bool "TI AM62Lx EVM"
+	select MACH_AM62LX
+	help
+	  Say Y here if you are using a TI AM62Lx EVM board
 
 config ARCH_K3_AUTHENTICATE_IMAGE
 	bool "Force authentication of FIP image against ROM API"
@@ -51,5 +64,35 @@ config ARCH_K3_COMMAND_AUTHENTICATE
 	help
 	  Add k3_authenticate_image command to test authenticating images
 	  against the K3 ROM API.
+
+choice
+	prompt "Select signing key"
+	default ARCH_K3_SIGNING_KEY_TI_DEVEL
+
+config ARCH_K3_SIGNING_KEY_TI_DEVEL
+	bool "Use TI devel key for signing (arch/arm/mach-k3/custMpk.pem)"
+	help
+	  Use the TI provided devel key for signing the bootable certificates
+
+config ARCH_K3_SIGNING_KEY_CUSTOM
+	bool "Specify custom key for signing"
+	help
+	  Use custom keys for signing the bootable certificates
+
+endchoice
+
+config ARCH_K3_SIGNING_KEY_ENV
+	bool "Specify signing key in environment"
+	depends on ARCH_K3_SIGNING_KEY_CUSTOM
+	help
+	  If this option is enabled the content of CONFIG_ARCH_K3_SIGNING_KEY
+	  is treated as name of an environment variable rather than a filename/uri
+	  directly which allows for better integration with build systems.
+
+config ARCH_K3_SIGNING_KEY
+	string "Signing key"
+	depends on ARCH_K3_SIGNING_KEY_CUSTOM
+	help
+	  Path or PKS#11 uri for the signing keys
 
 endmenu

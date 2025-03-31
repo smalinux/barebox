@@ -14,6 +14,7 @@
 #define pr_fmt(fmt) "barebox-ratp: " fmt
 
 #include <common.h>
+#include <security/config.h>
 #include <command.h>
 #include <malloc.h>
 #include <init.h>
@@ -28,10 +29,7 @@
 #include <fs.h>
 #include <console_countdown.h>
 
-LIST_HEAD(ratp_command_list);
-EXPORT_SYMBOL(ratp_command_list);
-
-#define for_each_ratp_command(cmd) list_for_each_entry(cmd, &ratp_command_list, list)
+static LIST_HEAD(ratp_command_list);
 
 struct ratp_bb_command_return {
 	uint32_t errno;
@@ -49,6 +47,7 @@ struct ratp_ctx {
 
 	struct ratp_bb_pkt *fs_rx;
 
+	struct sconfig_notifier_block sconfig_notifier;
 	struct poller_struct poller;
 	struct work_queue wq;
 
@@ -57,30 +56,42 @@ struct ratp_ctx {
 	bool wq_registered;
 };
 
+struct ratp_command_entry {
+	struct list_head list;
+	const struct ratp_command *cmd;
+};
+
 static int compare_ratp_command(struct list_head *a, struct list_head *b)
 {
-	int id_a = list_entry(a, struct ratp_command, list)->request_id;
-	int id_b = list_entry(b, struct ratp_command, list)->request_id;
+	int id_a = list_entry(a, const struct ratp_command_entry, list)->cmd->request_id;
+	int id_b = list_entry(b, const struct ratp_command_entry, list)->cmd->request_id;
 
 	return (id_a - id_b);
 }
 
-int register_ratp_command(struct ratp_command *cmd)
+int register_ratp_command(const struct ratp_command *cmd)
 {
+	struct ratp_command_entry *entry;
+
 	debug("register ratp command: request %hu, response %hu\n",
 	      cmd->request_id, cmd->response_id);
-	list_add_sort(&cmd->list, &ratp_command_list, compare_ratp_command);
+
+	entry = xzalloc(sizeof(*entry));
+	entry->cmd = cmd;
+
+	list_add_sort(&entry->list, &ratp_command_list, compare_ratp_command);
+
 	return 0;
 }
 EXPORT_SYMBOL(register_ratp_command);
 
-static struct ratp_command *find_ratp_request(uint16_t request_id)
+static const struct ratp_command *find_ratp_request(uint16_t request_id)
 {
-	struct ratp_command *cmdtp;
+	struct ratp_command_entry *entry;
 
-	for_each_ratp_command(cmdtp)
-		if (request_id == cmdtp->request_id)
-			return cmdtp;
+	list_for_each_entry(entry, &ratp_command_list, list)
+		if (request_id == entry->cmd->request_id)
+			return entry->cmd;
 
 	return NULL;	/* not found */
 }
@@ -211,7 +222,7 @@ static int ratp_bb_dispatch(struct ratp_ctx *ctx, const void *buf, int len)
 	int dlen = len - sizeof(struct ratp_bb);
 	int ret = 0;
 	uint16_t type = be16_to_cpu(rbb->type);
-	struct ratp_command *cmd;
+	const struct ratp_command *cmd;
 	struct ratp_work *rw;
 
 	/* See if there's a command registered to this type */
@@ -447,10 +458,21 @@ static void ratp_work_cancel(struct work_struct *w)
 	free(rw);
 }
 
+static void barebox_ratp_sconfig_update(struct sconfig_notifier_block *nb,
+				       enum security_config_option opt,
+				       bool allowed)
+{
+	if (!allowed && ratp_ctx)
+		ratp_unregister(ratp_ctx);
+}
+
 int barebox_ratp(struct console_device *cdev)
 {
 	int ret;
 	struct ratp_ctx *ctx;
+
+	if (!IS_ALLOWED(SCONFIG_RATP))
+		return -EPERM;
 
 	if (!cdev->getc || !cdev->putc)
 		return -EINVAL;
@@ -474,7 +496,7 @@ int barebox_ratp(struct console_device *cdev)
 
 	ret = console_register(&ctx->ratp_console);
 	if (ret) {
-		pr_err("registering console failed with %s\n", strerror(-ret));
+		pr_err("registering console failed with %pe\n", ERR_PTR(ret));
 		return ret;
 	}
 
@@ -505,6 +527,10 @@ int barebox_ratp(struct console_device *cdev)
 
 	console_set_active(&ctx->ratp_console, CONSOLE_STDOUT | CONSOLE_STDERR |
 			CONSOLE_STDIN);
+
+	sconfig_register_handler_filtered(&ctx->sconfig_notifier,
+					  barebox_ratp_sconfig_update,
+					  SCONFIG_RATP);
 
 	return 0;
 

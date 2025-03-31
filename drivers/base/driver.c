@@ -226,7 +226,7 @@ static int match(struct driver *drv, struct device *dev)
 
 	dev->driver = drv;
 
-	if (dev->bus->match && dev->bus->match(dev, drv))
+	if (!driver_match_device(drv, dev))
 		goto err_out;
 	ret = device_probe(dev);
 	if (ret)
@@ -262,13 +262,17 @@ int register_device(struct device *new_device)
 	list_add_tail(&new_device->list, &device_list);
 	INIT_LIST_HEAD(&new_device->children);
 	INIT_LIST_HEAD(&new_device->cdevs);
-	INIT_LIST_HEAD(&new_device->parameters);
 	INIT_LIST_HEAD(&new_device->active);
 	INIT_LIST_HEAD(&new_device->bus_list);
+	INIT_LIST_HEAD(&new_device->class_list);
+
+	bobject_init(&new_device->bobject);
+
+	of_pinctrl_register_consumer(new_device, new_device->device_node);
 
 	if (new_device->bus) {
 		if (!new_device->parent)
-			new_device->parent = new_device->bus->dev;
+			new_device->parent = &new_device->bus->dev;
 
 		list_add_tail(&new_device->bus_list, &new_device->bus->device_list);
 
@@ -294,7 +298,9 @@ int unregister_device(struct device *old_dev)
 
 	dev_dbg(old_dev, "unregister\n");
 
-	dev_remove_parameters(old_dev);
+	bobject_del(&old_dev->bobject);
+
+	of_pinctrl_unregister_consumer(old_dev);
 
 	if (old_dev->driver)
 		device_remove(old_dev);
@@ -318,6 +324,7 @@ int unregister_device(struct device *old_dev)
 
 	list_del(&old_dev->list);
 	list_del(&old_dev->bus_list);
+	list_del(&old_dev->class_list);
 	list_del(&old_dev->active);
 
 	/* remove device from parents child list */
@@ -341,8 +348,6 @@ EXPORT_SYMBOL(unregister_device);
  */
 void free_device_res(struct device *dev)
 {
-	free(dev->name);
-	dev->name = NULL;
 	free(dev->unique_name);
 	dev->unique_name = NULL;
 	free(dev->deferred_probe_reason);
@@ -547,7 +552,14 @@ void __iomem *dev_platform_get_and_ioremap_resource(struct device *dev,
 	res = dev_request_mem_resource(dev, num);
 	if (IS_ERR(res))
 		return IOMEM_ERR_PTR(PTR_ERR(res));
-	else if (WARN_ON(IS_ERR_VALUE(res->start)))
+
+	/* As everything is mapped 1:1 by default, drivers on unlucky
+	 * platforms can end up successfully requesting memory, but
+	 * getting a base address that looks like an error pointer.
+	 * Let's warn loudly about this case, as these drivers
+	 * should be using dev_request_mem_resource instead.
+	 */
+	if (WARN_ON(IS_ERR_VALUE(res->start)))
 		return IOMEM_ERR_PTR(-EINVAL);
 
 	if (out_res)
@@ -585,6 +597,8 @@ void __iomem *dev_request_mem_region(struct device *dev, int num)
 	struct resource *res;
 
 	res = dev_request_mem_resource(dev, num);
+	if (!IS_ERR(res) && WARN_ON(IS_ERR_VALUE(res->start)))
+		return IOMEM_ERR_PTR(res->start);
 	if (IS_ERR(res))
 		return ERR_CAST(res);
 
@@ -609,38 +623,6 @@ int generic_memmap_ro(struct cdev *cdev, void **map, int flags)
 
 	return generic_memmap_rw(cdev, map, flags);
 }
-
-/**
- * dev_set_name - set a device name
- * @dev: device
- * @fmt: format string for the device's name
- *
- * NOTE: This function expects dev->name to be free()-able, so extra
- * precautions needs to be taken when mixing its usage with manual
- * assignement of device.name.
- */
-int dev_set_name(struct device *dev, const char *fmt, ...)
-{
-	va_list vargs;
-	int err;
-	/*
-	 * Save old pointer in case we are overriding already set name
-	 */
-	char *oldname = dev->name;
-
-	va_start(vargs, fmt);
-	err = vasprintf(&dev->name, fmt, vargs);
-	va_end(vargs);
-
-	/*
-	 * Free old pointer, we do this after vasprintf call in case
-	 * old device name was in one of vargs
-	 */
-	free(oldname);
-
-	return WARN_ON(err < 0) ? err : 0;
-}
-EXPORT_SYMBOL_GPL(dev_set_name);
 
 /**
  * dev_add_alias - add alias for device
@@ -697,21 +679,6 @@ static void devices_shutdown(void)
 	}
 }
 devshutdown_exitcall(devices_shutdown);
-
-int dev_get_drvdata(struct device *dev, const void **data)
-{
-	if (dev->of_id_entry) {
-		*data = dev->of_id_entry->data;
-		return 0;
-	}
-
-	if (dev->id_entry) {
-		*data = (const void **)dev->id_entry->driver_data;
-		return 0;
-	}
-
-	return -ENODEV;
-}
 
 const void *device_get_match_data(struct device *dev)
 {

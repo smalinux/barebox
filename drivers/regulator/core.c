@@ -179,7 +179,7 @@ static int regulator_resolve_supply(struct regulator_dev *rdev)
 		 * we couldn't. If you want to get rid of this warning, consider
 		 * migrating your platform to have deep probe support.
 		 */
-		rdev_warn(rdev, "Failed to get '%s' regulator (ignored).\n",
+		rdev_warn(rdev, "Failed to get '%s' supply (ignored).\n",
 			 supply_name);
 		return 0;
 	}
@@ -329,7 +329,8 @@ int of_regulator_register(struct regulator_dev *rdev, struct device_node *node)
 }
 
 static struct regulator_dev *of_regulator_get(struct device *dev,
-						   const char *supply)
+					      struct device_node *np,
+					      const char *supply)
 {
 	char *propname;
 	struct regulator_dev *rdev;
@@ -339,7 +340,7 @@ static struct regulator_dev *of_regulator_get(struct device *dev,
 	/*
 	 * If the device does have a device node return the dummy regulator.
 	 */
-	if (!dev->of_node)
+	if (!np)
 		return NULL;
 
 	propname = basprintf("%s-supply", supply);
@@ -348,7 +349,7 @@ static struct regulator_dev *of_regulator_get(struct device *dev,
 	 * If the device node does not contain a supply property, this device doesn't
 	 * need a regulator. Return the dummy regulator in this case.
 	 */
-	if (!of_get_property(dev->of_node, propname, NULL)) {
+	if (!of_get_property(np, propname, NULL)) {
 		dev_dbg(dev, "No %s-supply node found, using dummy regulator\n",
 				supply);
 		rdev = NULL;
@@ -359,7 +360,7 @@ static struct regulator_dev *of_regulator_get(struct device *dev,
 	 * The device node specifies a supply, so it's mandatory. Return an error when
 	 * something goes wrong below.
 	 */
-	node = of_parse_phandle(dev->of_node, propname, 0);
+	node = of_parse_phandle(np, propname, 0);
 	if (!node) {
 		dev_dbg(dev, "No %s node found\n", propname);
 		rdev = ERR_PTR(-EINVAL);
@@ -408,7 +409,8 @@ out:
 }
 #else
 static struct regulator_dev *of_regulator_get(struct device *dev,
-						   const char *supply)
+					      struct device_node *np,
+					      const char *supply)
 {
 	return NULL;
 }
@@ -505,14 +507,16 @@ static struct regulator_dev *dev_regulator_get(struct device *dev,
  *
  * Return: a regulator object or an error pointer
  */
-struct regulator *regulator_get(struct device *dev, const char *supply)
+struct regulator *dev_of_regulator_get(struct device *dev,
+				       struct device_node *np,
+				       const char *supply)
 {
 	struct regulator_dev *rdev = NULL;
 	struct regulator *r;
 	int ret;
 
-	if (dev->of_node && supply) {
-		rdev = of_regulator_get(dev, supply);
+	if (np && supply) {
+		rdev = of_regulator_get(dev, np, supply);
 		if (IS_ERR(rdev))
 			return ERR_CAST(rdev);
 	}
@@ -608,6 +612,20 @@ int regulator_disable(struct regulator *r)
 		return 0;
 
 	return regulator_disable_rdev(r->rdev);
+}
+
+int regulator_is_enabled(struct regulator *r)
+{
+	if (!r)
+		return 0;
+
+	if (r->rdev->always_on)
+		return 1;
+
+	if (r->rdev->desc->ops->is_enabled)
+		return r->rdev->desc->ops->is_enabled(r->rdev);
+
+	return r->rdev->enable_count;
 }
 
 int regulator_set_voltage(struct regulator *r, int min_uV, int max_uV)

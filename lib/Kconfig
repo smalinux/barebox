@@ -139,6 +139,7 @@ config RATP
 
 config ALLOW_PRNG_FALLBACK
 	bool "Allow fallback to PRNG if HWRNG not available."
+	select HAS_INSECURE_DEFAULTS
 	help
 	  WARNING: it is not secure!!
 
@@ -160,6 +161,9 @@ config CRC8
 	  This option provides CRC8 function. Drivers may select this
 	  when they need to do cyclic redundancy check according CRC8
 	  algorithm. Module will be called crc8.
+
+config CRC16
+	bool "CRC16 function"
 
 source "lib/gui/Kconfig"
 
@@ -209,10 +213,6 @@ config GENERIC_LIB_MULDI3
 config NLS
 	bool "Native language support"
 
-config BLOBGEN
-	select BASE64
-	bool "include blob encode/decode support"
-
 config GENERIC_ALLOCATOR
 	bool
 	help
@@ -222,5 +222,3 @@ config IDR
 	bool
 
 endmenu
-
-source "lib/Kconfig.hardening"

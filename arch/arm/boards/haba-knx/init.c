@@ -139,7 +139,7 @@ err_open:
 	close(fd);
 err:
 	if (ret)
-		pr_err("can't read eeprom /dev/eeprom0 (%s)\n", strerror(ret));
+		pr_err("can't read eeprom /dev/eeprom0 (%pe)\n", ERR_PTR(ret));
 
 	return ret;
 }
@@ -288,6 +288,8 @@ static int haba_knx_devices_init(void)
 	armlinux_set_architecture(MACH_TYPE_HABA_KNX_LITE);
 
 	devfs_create_partitions("nand0", haba_knx_nand0_partitions);
+
+	default_environment_path_set("/dev/env0");
 
 	if (IS_ENABLED(CONFIG_DEFAULT_ENVIRONMENT_GENERIC))
 		defaultenv_append_directory(defaultenv_haba_knx);

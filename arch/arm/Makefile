@@ -8,6 +8,10 @@ am335x_mlo_sdmmc_defconfig:
 am335x_mlo_rawflash_defconfig:
 	$(call merge_into_defconfig,am335x_mlo_defconfig,nomci)
 
+multi_v8_efi_defconfig:
+	$(call merge_into_defconfig,multi_v8_defconfig,efi-payload)
+generated_configs += multi_v8_efi_defconfig
+
 KBUILD_CPPFLAGS	+= -D__ARM__ -fno-strict-aliasing
 # Explicitly specifiy 32-bit ARM ISA since toolchain default can be -mthumb:
 ifeq ($(CONFIG_CPU_64),y)
@@ -99,7 +103,6 @@ machine-$(CONFIG_ARCH_MVEBU)		+= mvebu
 machine-$(CONFIG_ARCH_OMAP)		+= omap
 machine-$(CONFIG_ARCH_PXA)		+= pxa
 machine-$(CONFIG_ARCH_ROCKCHIP)		+= rockchip
-machine-$(CONFIG_ARCH_SAMSUNG)		+= samsung
 machine-$(CONFIG_ARCH_SOCFPGA)		+= socfpga
 machine-$(CONFIG_ARCH_STM32MP)		+= stm32mp
 machine-$(CONFIG_ARCH_SUNXI)		+= sunxi
@@ -138,6 +141,9 @@ endif
 common-y += arch/arm/boards/ $(MACH)
 common-y += arch/arm/cpu/
 common-y += arch/arm/crypto/
+
+# For cleaning
+common- += $(patsubst %,arch/arm/mach-%/,$(machine-))
 
 ifeq ($(CONFIG_CPU_64), y)
 common-y += arch/arm/lib64/

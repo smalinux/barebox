@@ -64,8 +64,14 @@ static ssize_t null_write(struct cdev *cdev, const void *buf, size_t count, loff
 	return count;
 }
 
+static ssize_t null_read(struct cdev *cdev, void *buf, size_t count, loff_t offset, ulong flags)
+{
+	return 0;
+}
+
 static struct cdev_operations nullops = {
 	.write = null_write,
+	.read = null_read,
 };
 
 static int null_init(void)
@@ -87,7 +93,7 @@ device_initcall(null_init);
 
 static ssize_t prng_read(struct cdev *cdev, void *buf, size_t count, loff_t offset, ulong flags)
 {
-	get_random_bytes(buf, count);
+	get_noncrypto_bytes(buf, count);
 	return count;
 }
 

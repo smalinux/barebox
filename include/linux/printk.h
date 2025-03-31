@@ -3,6 +3,7 @@
 #define __LINUX_PRINTK_H
 
 #include <linux/list.h>
+#include <linux/compiler.h>
 #include <linux/err.h>
 #include <printf.h>
 #include <stdarg.h>
@@ -28,25 +29,18 @@
 /* debugging and troubleshooting/diagnostic helpers. */
 struct device;
 
-#ifndef CONFIG_CONSOLE_NONE
+#if !defined(CONFIG_CONSOLE_NONE) && IN_PROPER
 int dev_printf(int level, const struct device *dev, const char *format, ...)
-	__attribute__ ((format(__printf__, 3, 4)));
+	__printf(3, 4);
 #else
-static inline int dev_printf(int level, const struct device *dev,
-			     const char *format, ...)
-{
-	return 0;
-}
+#define dev_printf(level, dev, ...) pr_print(((void)dev, (level)), __VA_ARGS__)
 #endif
 
 #if (IN_PROPER && !defined(CONFIG_CONSOLE_NONE)) || \
 	(IN_PBL && defined(CONFIG_PBL_CONSOLE))
-int pr_print(int level, const char *format, ...)
-	__attribute__ ((format(__printf__, 2, 3)));
+int pr_print(int level, const char *format, ...) __printf(2, 3);
 #else
-static int pr_print(int level, const char *format, ...)
-	__attribute__ ((format(__printf__, 2, 3)));
-static inline int pr_print(int level, const char *format, ...)
+static inline __printf(2, 3) int pr_print(int level, const char *format, ...)
 {
 	return 0;
 }
@@ -106,18 +100,26 @@ static inline int pr_print(int level, const char *format, ...)
 
 #if LOGLEVEL >= MSG_ERR
 int dev_err_probe(struct device *dev, int err, const char *fmt, ...)
-	__attribute__ ((format(__printf__, 3, 4)));
+	__printf(3, 4);
 #elif !defined(dev_err_probe)
-static int dev_err_probe(struct device *dev, int err, const char *fmt, ...)
-	__attribute__ ((format(__printf__, 3, 4)));
-static inline int dev_err_probe(struct device *dev, int err, const char *fmt,
-				...)
+static inline __printf(3, 4) int dev_err_probe(struct device *dev,
+			       int err, const char *fmt, ...)
 {
 	return err;
 }
 #endif
 
-#define dev_errp_probe(dev, errptr, args...) dev_err_probe((dev), PTR_ERR(errptr), args)
+/* Simple helper for dev_err_probe() when error is already a pointer. */
+#define dev_errp_probe(dev, errptr, args...) \
+	dev_err_probe((dev), PTR_ERR(errptr), args)
+
+/* Simple helper for dev_err_probe() when ERR_PTR() is to be returned. */
+#define dev_err_ptr_probe(dev, ___err, fmt, ...) \
+	ERR_PTR(dev_err_probe(dev, ___err, fmt, ##__VA_ARGS__))
+
+/* Simple helper for dev_err_probe() when ERR_CAST() is to be returned. */
+#define dev_err_cast_probe(dev, ___err_ptr, fmt, ...) \
+	ERR_PTR(dev_err_probe(dev, PTR_ERR(___err_ptr), fmt, ##__VA_ARGS__))
 
 #define __pr_printk(level, format, args...) \
 	({	\
@@ -165,7 +167,8 @@ static inline int dev_err_probe(struct device *dev, int err, const char *fmt,
 int memory_display(const void *addr, loff_t offs, unsigned nbytes, int size,
 		   int swab);
 int __pr_memory_display(int level, const void *addr, loff_t offs, unsigned nbytes,
-			int size, int swab, const char *format, ...);
+			int size, int swab, const char *format, ...)
+	__printf(7, 8);
 
 #define pr_memory_display(level, addr, offs, nbytes, size, swab) \
 	({	\

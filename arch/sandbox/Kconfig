@@ -7,6 +7,7 @@ config SANDBOX
 	select OFTREE
 	select GPIOLIB
 	select ARCH_HAS_UBSAN_SANITIZE_ALL
+	select ARCH_HAS_FORTIFY_SOURCE
 	select HAS_DMA
 	select BLOCK
 	select BLOCK_WRITE
@@ -20,6 +21,11 @@ config SANDBOX
 	select ARCH_DMA_DEFAULT_COHERENT
 	select ARCH_WANT_FRAME_POINTERS
 	select BAREBOX_CMDLINE
+	select HAVE_ARCH_BOOTM_OFTREE
+	select HAVE_PBL_IMAGE
+	select HAVE_PBL_MULTI_IMAGES
+	select PBL_IMAGE_NO_PIGGY
+	select PBL_CLOCKSOURCE if COMPILE_TEST
 	default y
 
 config ARCH_LINUX_NAME
@@ -81,7 +87,18 @@ config CMD_SANDBOX_CPUINFO
 	help
 	  Say yes here to get a dummy cpuinfo command.
 
+config HAVE_LIBSDL2
+	def_bool $(success,$(CROSS_PKG_CONFIG) --exists sdl2)
+
+config HAVE_LIBFTDI
+	def_bool $(success,$(CROSS_PKG_CONFIG) --exists libftdi1)
+
 config SDL
 	bool
+
+config SANDBOX_LINK_CXX
+	def_bool FUZZ_EXTERNAL
+	help
+	  Link with CXX instead of CC to support C++ static libraries.
 
 endmenu

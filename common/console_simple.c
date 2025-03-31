@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <debug_ll.h>
 #include <console.h>
+#include <security/config.h>
 
 LIST_HEAD(console_list);
 EXPORT_SYMBOL(console_list);
@@ -44,6 +45,9 @@ EXPORT_SYMBOL(console_putc);
 
 int tstc(void)
 {
+	if (!IS_ALLOWED(SCONFIG_CONSOLE_INPUT))
+		return 0;
+
 	if (!console)
 		return 0;
 
@@ -53,6 +57,9 @@ EXPORT_SYMBOL(tstc);
 
 int getchar(void)
 {
+	if (!IS_ALLOWED(SCONFIG_CONSOLE_INPUT))
+		return -1;
+
 	if (!console)
 		return -EINVAL;
 	return console->getc(console);
@@ -65,20 +72,6 @@ void console_flush(void)
 		console->flush(console);
 }
 EXPORT_SYMBOL(console_flush);
-
-/* test if ctrl-c was pressed */
-int ctrlc (void)
-{
-	int ret = 0;
-#ifdef CONFIG_ARCH_HAS_CTRLC
-	ret = arch_ctrlc();
-#else
-	if (tstc() && getchar() == 3)
-		ret = 1;
-#endif
-	return ret;
-}
-EXPORT_SYMBOL(ctrlc);
 
 int console_register(struct console_device *newcdev)
 {

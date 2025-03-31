@@ -7,6 +7,7 @@ targets:
         cpu: Nehalem
         memory: 1024M
         kernel: barebox.efi
+        display: qemu-default
         extra_args: '-bios OVMF.fd -global ICH9-LPC.noreboot=false'
       BareboxDriver:
         prompt: 'barebox@[^:]+:[^ ]+ '
@@ -15,7 +16,6 @@ targets:
     features:
       - pci
     runner:
-      tuxmake_arch: x86_64
       kconfig_add:
         - CONFIG_DRIVER_SERIAL_NS16550=y
         - CONFIG_CONSOLE_ACTIVATE_FIRST=y # avoid duplicate output

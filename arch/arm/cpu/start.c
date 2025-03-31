@@ -100,7 +100,7 @@ void *barebox_arm_boot_dtb(void)
 
 unsigned long arm_mem_ramoops_get(void)
 {
-	return arm_mem_ramoops(arm_stack_top);
+	return arm_mem_ramoops(arm_endmem);
 }
 EXPORT_SYMBOL_GPL(arm_mem_ramoops_get);
 
@@ -118,9 +118,10 @@ EXPORT_SYMBOL_GPL(arm_mem_membase_get);
 
 static int barebox_memory_areas_init(void)
 {
-	if (IS_ENABLED(CONFIG_KASAN))
+	if (kasan_enabled())
 		request_sdram_region("kasan shadow", kasan_shadow_base,
-				     mem_malloc_start() - kasan_shadow_base);
+				     mem_malloc_start() - kasan_shadow_base,
+				     MEMTYPE_BOOT_SERVICES_DATA, MEMATTRS_RW);
 
 	return 0;
 }

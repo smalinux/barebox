@@ -10,13 +10,14 @@
 #include <linux/tee_drv.h>
 #include <linux/uaccess.h>
 #include <linux/printk.h>
+#include <structio.h>
 #include "tee_private.h"
 
 #define TEE_NUM_DEVICES	32
 
 #define TEE_IOCTL_PARAM_SIZE(x) (sizeof(struct tee_param) * (x))
 
-static LIST_HEAD(tee_clients);
+static DEFINE_DEV_CLASS(tee_client_class, "tee_client");
 
 struct tee_context *teedev_open(struct tee_device *teedev)
 {
@@ -487,9 +488,31 @@ static void tee_devinfo(struct device *dev)
 {
 	struct tee_device *teedev = dev->priv;
 	struct tee_ioctl_version_data vers;
+	const char *impl = NULL, *rev;
 
 	teedev->desc->ops->get_version(teedev, &vers);
-	printf("Implementation ID: %d\n", vers.impl_id);
+
+	switch (vers.impl_id) {
+	case TEE_IMPL_ID_OPTEE:
+		impl = "optee";
+		break;
+	case TEE_IMPL_ID_AMDTEE:
+		impl = "amdtee";
+		break;
+	}
+
+	if (structio_active()) {
+		stprintf("impl.id", "%d", vers.impl_id);
+		if (impl)
+			stprintf("impl.name", "%s", impl);
+	} else {
+		printf("Implementation ID: %d%s%s%s\n", vers.impl_id,
+		       impl ? " ( " : "", impl, impl ? ")" : "");
+	}
+
+	rev = dev_get_param(dev->parent, "revision");
+	if (rev)
+		stprintf_prefix("impl.rev", "Revision: ", "%s", rev);
 }
 
 /**
@@ -591,7 +614,7 @@ int tee_device_register(struct tee_device *teedev)
 			goto out;
 	}
 
-	list_add_tail(&teedev->list, &tee_clients);
+	class_add_device(&tee_client_class, &teedev->dev);
 
 	teedev->flags |= TEE_DEVICE_FLAG_REGISTERED;
 	return 0;
@@ -640,7 +663,6 @@ void tee_device_unregister(struct tee_device *teedev)
 	if (!teedev)
 		return;
 
-	list_del(&teedev->list);
 	if (IS_ENABLED(CONFIG_OPTEE_DEVFS))
 		devfs_remove(&teedev->cdev);
 	unregister_device(&teedev->dev);
@@ -687,7 +709,7 @@ tee_client_open_context(struct tee_context *start,
 	if (start)
 		startdev = &start->teedev->dev;
 
-	list_for_each_entry(teedev, &tee_clients, list) {
+	class_for_each_container_of_device(&tee_client_class, teedev, dev) {
 		struct device *dev = &teedev->dev;
 		struct tee_context *ctx ;
 
@@ -754,7 +776,7 @@ int tee_client_invoke_func(struct tee_context *ctx,
 EXPORT_SYMBOL_GPL(tee_client_invoke_func);
 
 static int tee_client_device_match(struct device *dev,
-				   struct device_driver *drv)
+				   const struct device_driver *drv)
 {
 	const struct tee_client_device_id *id_table;
 	struct tee_client_device *tee_device;
@@ -764,11 +786,11 @@ static int tee_client_device_match(struct device *dev,
 
 	while (!uuid_is_null(&id_table->uuid)) {
 		if (uuid_equal(&tee_device->id.uuid, &id_table->uuid))
-			return 0;
+			return true;
 		id_table++;
 	}
 
-	return -1;
+	return false;
 }
 
 struct bus_type tee_bus_type = {

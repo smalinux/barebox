@@ -6,7 +6,7 @@
 #include <linux/compiler.h>
 
 /* For use when unrelocated */
-static inline void __hang(void)
+static inline __noreturn void __hang(void)
 {
 	while (1);
 }
@@ -14,7 +14,7 @@ void __noreturn hang (void);
 
 /*
  * Function pointer to the main barebox function. Defaults
- * to run_shell() when a shell is enabled.
+ * to run_init() when shell and command support are enabled.
  */
 extern int (*barebox_main)(void);
 
@@ -47,5 +47,17 @@ void __noreturn start_barebox(void);
 void shutdown_barebox(void);
 
 long get_ram_size(volatile long *base, long size);
+
+enum system_states {
+	BAREBOX_STARTING,
+	BAREBOX_RUNNING,
+	BAREBOX_EXITING,
+};
+
+#if IN_PROPER
+extern enum system_states barebox_system_state;
+#else
+#define barebox_system_state	BAREBOX_STARTING
+#endif
 
 #endif

@@ -14,6 +14,7 @@
 #include <linux/linkage.h>
 #include <common.h>
 #include <linux/sizes.h>
+#include <linux/ktime.h>
 #include <memory.h>
 #include <clock.h>
 #include <command.h>
@@ -51,7 +52,7 @@ void *efi_get_variable(char *name, efi_guid_t *vendor, int *var_size)
 {
 	efi_status_t efiret;
 	void *buf;
-	unsigned long size = 0;
+	size_t size = 0;
 	s16 *name16 = xstrdup_char_to_wchar(name);
 
 	efiret = RT->get_variable(name16, vendor, NULL, &size, NULL);
@@ -84,7 +85,7 @@ out:
 }
 
 int efi_set_variable(char *name, efi_guid_t *vendor, uint32_t attributes,
-		     void *buf, unsigned long size)
+		     void *buf, size_t size)
 {
 	efi_status_t efiret = EFI_SUCCESS;
 	s16 *name16 = xstrdup_char_to_wchar(name);
@@ -225,14 +226,16 @@ static int efi_console_init(void)
 }
 console_efi_initcall(efi_console_init);
 
-static void __noreturn efi_restart_system(struct restart_handler *rst)
+static void __noreturn efi_restart_system(struct restart_handler *rst,
+					  unsigned long flags)
 {
 	RT->reset_system(EFI_RESET_WARM, EFI_SUCCESS, 0, NULL);
 
 	hang();
 }
 
-static void __noreturn efi_poweroff_system(struct poweroff_handler *handler)
+static void __noreturn efi_poweroff_system(struct poweroff_handler *handler,
+					   unsigned long flags)
 {
 	shutdown_barebox();
 	RT->reset_system(EFI_RESET_SHUTDOWN, EFI_SUCCESS, 0, NULL);
@@ -267,10 +270,25 @@ static int efi_init(void)
 }
 device_efi_initcall(efi_init);
 
+static void efi_request_mem(size_t bytes)
+{
+	efi_status_t efiret;
+	efi_physical_addr_t mem;
+	size_t pages;
+
+	pages = DIV_ROUND_UP(bytes, EFI_PAGE_SIZE);
+	efiret = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA,
+				    pages, &mem);
+	if (!EFI_ERROR(efiret))
+		malloc_add_pool(efi_phys_to_virt(mem), pages * EFI_PAGE_SIZE);
+}
+
 static int efi_core_init(void)
 {
 	struct device *dev;
 	int ret;
+
+	malloc_register_store(efi_request_mem);
 
 	dev = device_alloc("efi-cs", DEVICE_ID_SINGLE);
 	ret = platform_device_register(dev);
@@ -308,7 +326,7 @@ static int efi_postcore_init(void)
 		EFI_LOADER_FEATURE_DEVICETREE;
 
 	efi_set_variable_usec("LoaderTimeInitUSec", &efi_systemd_vendor_guid,
-			      get_time_ns()/1000);
+			      ktime_to_us(ktime_get()));
 
 	efi_set_variable_printf("LoaderInfo", &efi_systemd_vendor_guid,
 			"barebox-" UTS_RELEASE);

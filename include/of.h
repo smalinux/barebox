@@ -52,6 +52,23 @@ struct of_phandle_args {
 	uint32_t args[MAX_PHANDLE_ARGS];
 };
 
+struct of_phandle_iterator {
+	/* Common iterator information */
+	const char *cells_name;
+	int cell_count;
+	const struct device_node *parent;
+
+	/* List size information */
+	const __be32 *list_end;
+	const __be32 *phandle_end;
+
+	/* Current position state */
+	const __be32 *cur;
+	uint32_t cur_count;
+	phandle phandle;
+	struct device_node *node;
+};
+
 #define OF_MAX_RESERVE_MAP	16
 struct of_reserve_map {
 	uint64_t start[OF_MAX_RESERVE_MAP];
@@ -73,14 +90,10 @@ struct resource;
 
 void of_fix_tree(struct device_node *);
 
-int of_match(struct device *dev, struct driver *drv);
+bool of_match(struct device *dev, const struct driver *drv);
 
 int of_add_initrd(struct device_node *root, resource_size_t start,
 		resource_size_t end);
-
-struct fdt_header *fdt_get_tree(void);
-
-struct fdt_header *of_get_fixed_tree(const struct device_node *node);
 
 /* Helper to read a big number; size is in cells (not bytes) */
 static inline u64 of_read_number(const __be32 *cell, int size)
@@ -120,7 +133,6 @@ void of_print_nodes(struct device_node *node, int indent, unsigned maxpropsize);
 void of_print_properties(struct device_node *node, unsigned maxpropsize);
 int of_diff(struct device_node *a, struct device_node *b, int indent);
 int of_probe(void);
-int of_parse_dtb(struct fdt_header *fdt);
 struct device_node *of_unflatten_dtb(const void *fdt, int size);
 struct device_node *of_unflatten_dtb_const(const void *infdt, int size);
 
@@ -138,6 +150,9 @@ extern int of_bus_n_addr_cells(struct device_node *np);
 extern int of_n_addr_cells(struct device_node *np);
 extern int of_bus_n_size_cells(struct device_node *np);
 extern int of_n_size_cells(struct device_node *np);
+extern int __of_parse_phandle_with_args(const struct device_node *np,
+	const char *list_name, const char *cells_name, int cell_count,
+	int index, struct of_phandle_args *out_args);
 extern bool of_node_name_eq(const struct device_node *np, const char *name);
 extern size_t of_node_has_prefix(const struct device_node *np, const char *prefix);
 
@@ -200,6 +215,7 @@ extern struct device_node *of_copy_node(struct device_node *parent,
 extern struct device_node *of_dup(const struct device_node *root);
 extern void of_delete_node(struct device_node *node);
 
+extern int of_alias_from_compatible(const struct device_node *node, char *alias, int len);
 extern const char *of_get_machine_compatible(void);
 extern int of_machine_is_compatible(const char *compat);
 extern int of_device_is_compatible(const struct device_node *device,
@@ -293,7 +309,7 @@ extern int of_property_write_string(struct device_node *np, const char *propname
 extern int of_property_write_strings(struct device_node *np, const char *propname,
 				    ...) __attribute__((__sentinel__));
 int of_property_sprintf(struct device_node *np, const char *propname, const char *fmt, ...)
-	__attribute__ ((format(__printf__, 3, 4)));
+	__printf(3, 4);
 
 extern struct device_node *of_parse_phandle(const struct device_node *np,
 					    const char *phandle_name,
@@ -302,11 +318,93 @@ extern struct device_node *of_parse_phandle_from(const struct device_node *np,
 					    struct device_node *root,
 					    const char *phandle_name,
 					    int index);
-extern int of_parse_phandle_with_args(const struct device_node *np,
-	const char *list_name, const char *cells_name, int index,
-	struct of_phandle_args *out_args);
+/**
+ * of_parse_phandle_with_args() - Find a node pointed by phandle in a list
+ * @np:		pointer to a device tree node containing a list
+ * @list_name:	property name that contains a list
+ * @cells_name:	property name that specifies phandles' arguments count
+ * @index:	index of a phandle to parse out
+ * @out_args:	optional pointer to output arguments structure (will be filled)
+ *
+ * This function is useful to parse lists of phandles and their arguments.
+ * Returns 0 on success and fills out_args, on error returns appropriate
+ * errno value.
+ *
+ * Caller is responsible to call of_node_put() on the returned out_args->np
+ * pointer.
+ *
+ * Example::
+ *
+ *  phandle1: node1 {
+ *	#list-cells = <2>;
+ *  };
+ *
+ *  phandle2: node2 {
+ *	#list-cells = <1>;
+ *  };
+ *
+ *  node3 {
+ *	list = <&phandle1 1 2 &phandle2 3>;
+ *  };
+ *
+ * To get a device_node of the ``node2`` node you may call this:
+ * of_parse_phandle_with_args(node3, "list", "#list-cells", 1, &args);
+ */
+static inline int of_parse_phandle_with_args(const struct device_node *np,
+					     const char *list_name,
+					     const char *cells_name,
+					     int index,
+					     struct of_phandle_args *out_args)
+{
+	int cell_count = -1;
+
+	/* If cells_name is NULL we assume a cell count of 0 */
+	if (!cells_name)
+		cell_count = 0;
+
+	return __of_parse_phandle_with_args(np, list_name, cells_name,
+					    cell_count, index, out_args);
+}
+
+/**
+ * of_parse_phandle_with_optional_args() - Find a node pointed by phandle in a list
+ * @np:		pointer to a device tree node containing a list
+ * @list_name:	property name that contains a list
+ * @cells_name:	property name that specifies phandles' arguments count
+ * @index:	index of a phandle to parse out
+ * @out_args:	optional pointer to output arguments structure (will be filled)
+ *
+ * Same as of_parse_phandle_with_args() except that if the cells_name property
+ * is not found, cell_count of 0 is assumed.
+ *
+ * This is used to useful, if you have a phandle which didn't have arguments
+ * before and thus doesn't have a '#*-cells' property but is now migrated to
+ * having arguments while retaining backwards compatibility.
+ */
+static inline int of_parse_phandle_with_optional_args(const struct device_node *np,
+						      const char *list_name,
+						      const char *cells_name,
+						      int index,
+						      struct of_phandle_args *out_args)
+{
+	return __of_parse_phandle_with_args(np, list_name, cells_name,
+					    0, index, out_args);
+}
+
 extern int of_count_phandle_with_args(const struct device_node *np,
 	const char *list_name, const char *cells_name);
+
+/* phandle iterator functions */
+extern int of_phandle_iterator_init(struct of_phandle_iterator *it,
+				    const struct device_node *np,
+				    const char *list_name,
+				    const char *cells_name,
+				    int cell_count);
+
+extern int of_phandle_iterator_next(struct of_phandle_iterator *it);
+extern int of_phandle_iterator_args(struct of_phandle_iterator *it,
+				    uint32_t *args,
+				    int size);
 
 extern void of_alias_scan(void);
 extern int of_alias_get_id(struct device_node *np, const char *stem);
@@ -325,9 +423,12 @@ extern const char *of_parse_phandle_and_get_alias_from(struct device_node *root,
 						       int index);
 
 extern struct device_node *of_get_root_node(void);
+extern struct fdt_header *of_get_flattened_tree(const struct device_node *node, bool fixup);
 extern int of_set_root_node(struct device_node *node);
 extern int barebox_register_of(struct device_node *root);
 extern int barebox_register_fdt(const void *dtb);
+
+extern struct device *of_platform_root_device;
 
 extern struct device *of_platform_device_create(struct device_node *np,
 						struct device *parent);
@@ -463,6 +564,11 @@ static inline int of_add_memory(struct device_node *node, bool dump)
 }
 
 static inline struct device_node *of_get_root_node(void)
+{
+	return NULL;
+}
+
+static inline struct fdt_header *of_get_flattened_tree(const struct device_node *node, bool fixup)
 {
 	return NULL;
 }
@@ -749,6 +855,16 @@ static inline int of_property_read_string_helper(const struct device_node *np,
 	return -ENOSYS;
 }
 
+static inline int __of_parse_phandle_with_args(const struct device_node *np,
+					       const char *list_name,
+					       const char *cells_name,
+					       int cell_count,
+					       int index,
+					       struct of_phandle_args *out_args)
+{
+	return -ENOSYS;
+}
+
 static inline const __be32 *of_prop_next_u32(const struct property *prop,
 					const __be32 *cur, u32 *pu)
 {
@@ -821,6 +937,27 @@ static inline int of_count_phandle_with_args(const struct device_node *np,
 				const char *list_name, const char *cells_name)
 {
 	return -ENOSYS;
+}
+
+static inline int of_phandle_iterator_init(struct of_phandle_iterator *it,
+					   const struct device_node *np,
+					   const char *list_name,
+					   const char *cells_name,
+					   int cell_count)
+{
+	return -ENOSYS;
+}
+
+static inline int of_phandle_iterator_next(struct of_phandle_iterator *it)
+{
+	return -ENOSYS;
+}
+
+static inline int of_phandle_iterator_args(struct of_phandle_iterator *it,
+					   uint32_t *args,
+					   int size)
+{
+	return 0;
 }
 
 static inline struct device_node *of_find_node_by_path_from(
@@ -1005,6 +1142,11 @@ static inline struct device *of_device_enable_and_register_by_alias(
 				const char *alias)
 {
 	return NULL;
+}
+
+static inline struct cdev *of_cdev_find(struct device_node *node)
+{
+	return ERR_PTR(-ENOSYS);
 }
 
 static inline int of_register_fixup(int (*fixup)(struct device_node *, void *),
@@ -1222,6 +1364,13 @@ static inline int of_property_read_s32(const struct device_node *np,
 	return of_property_read_u32(np, propname, (u32*) out_value);
 }
 
+#define of_for_each_phandle(it, err, np, ln, cn, cc)			\
+	for (of_phandle_iterator_init((it), (np), (ln), (cn), (cc)),	\
+	     err = of_phandle_iterator_next(it);			\
+	     err == 0;							\
+	     err = of_phandle_iterator_next(it))
+
+
 /**
  * of_property_read_u64_array - Find and read an array of 64 bit integers
  * from a property.
@@ -1349,8 +1498,36 @@ static inline struct device_node *of_find_root_node(struct device_node *node)
 	return node;
 }
 
+/*
+ * Get the fixed fdt. This function uses the fdt input pointer
+ * if provided or the barebox internal devicetree if not.
+ * It increases the size of the tree and applies the registered
+ * fixups.
+ */
+static inline struct fdt_header *of_get_fixed_tree(const struct device_node *node)
+{
+	return of_get_flattened_tree(node, true);
+}
+
+static inline struct fdt_header *of_get_fixed_tree_for_boot(const struct device_node *node)
+{
+	if (!IS_ENABLED(CONFIG_BOOTM_OFTREE_FALLBACK) && !node)
+		return NULL;
+
+	return of_get_fixed_tree(node);
+}
+
+static inline struct device_node *of_dup_root_node_for_boot(void)
+{
+	if (!IS_ENABLED(CONFIG_BOOTM_OFTREE_FALLBACK))
+		return NULL;
+
+	return of_dup(of_get_root_node());
+}
+
 struct of_overlay_filter {
-	bool (*filter_filename)(struct of_overlay_filter *, const char *filename);
+	bool (*filter_filename)(struct of_overlay_filter *, const char *filename); /* deprecated */
+	bool (*filter_pattern)(struct of_overlay_filter *, const char *pattern);
 	bool (*filter_content)(struct of_overlay_filter *, struct device_node *);
 	const char *name;
 	struct list_head list;

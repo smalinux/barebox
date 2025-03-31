@@ -10,7 +10,7 @@
 
 #include "w1.h"
 
-static LIST_HEAD(w1_buses);
+static DEFINE_DEV_CLASS(w1_bus_class, "w1_bus");
 
 static void w1_pre_write(struct w1_bus *bus);
 static void w1_post_write(struct w1_bus *bus);
@@ -362,12 +362,12 @@ int w1_reset_select_slave(struct w1_device *dev)
 #define to_w1_device(d)	container_of(d, struct w1_device, dev)
 #define to_w1_driver(d) container_of(d, struct w1_driver, drv)
 
-static int w1_bus_match(struct device *_dev, struct driver *_drv)
+static int w1_bus_match(struct device *_dev, const struct driver *_drv)
 {
-	struct w1_device *dev = to_w1_device(_dev);
-	struct w1_driver *drv = to_w1_driver(_drv);
+	const struct w1_device *dev = to_w1_device(_dev);
+	const struct w1_driver *drv = to_w1_driver(_drv);
 
-	return !(drv->fid == dev->fid);
+	return drv->fid == dev->fid;
 }
 
 static int w1_bus_probe(struct device *_dev)
@@ -411,7 +411,6 @@ static bool w1_is_registered(struct w1_bus *bus, u64 rn)
 
 static int w1_device_register(struct w1_bus *bus, struct w1_device *dev)
 {
-	char str[18];
 	int ret;
 
 	dev_set_name(&dev->dev, "w1-%x-", dev->fid);
@@ -425,12 +424,9 @@ static int w1_device_register(struct w1_bus *bus, struct w1_device *dev)
 	if (ret)
 		return ret;
 
-	sprintf(str, "0x%x", dev->fid);
-	dev_add_param_fixed(&dev->dev, "fid", str);
-	sprintf(str, "0x%llx", dev->id);
-	dev_add_param_fixed(&dev->dev, "id", str);
-	sprintf(str, "0x%llx", dev->reg_num);
-	dev_add_param_fixed(&dev->dev, "reg_num", str);
+	dev_add_param_uint32_fixed(&dev->dev, "fid", dev->fid, "0x%x");
+	dev_add_param_uint64_fixed(&dev->dev, "id", dev->id, "0x%llx");
+	dev_add_param_uint64_fixed(&dev->dev, "reg_num", dev->reg_num, "0x%llx");
 
 	return ret;
 }
@@ -608,7 +604,7 @@ int w1_bus_register(struct w1_bus *bus)
 	if (!bus->max_slave_count)
 		bus->max_slave_count = 10;
 
-	list_add_tail(&bus->list, &w1_buses);
+	class_add_device(&w1_bus_class, &bus->dev);
 
 	dev_set_name(&bus->dev, "w1_bus");
 	bus->dev.id = DEVICE_ID_DYNAMIC;

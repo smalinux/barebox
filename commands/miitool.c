@@ -313,8 +313,8 @@ static int do_miitool(int argc, char *argv[])
 		phydev = phy_device_create(mii, addr, -1);
 		ret = phy_register_device(phydev);
 		if (ret) {
-			printf("failed to register phy %s: %s\n",
-				dev_name(&phydev->dev), strerror(-ret));
+			printf("failed to register phy %s: %pe\n",
+				dev_name(&phydev->dev), ERR_PTR(ret));
 			goto free_phydevname;
 		} else {
 			printf("registered phy %s\n", dev_name(&phydev->dev));
@@ -344,9 +344,11 @@ BAREBOX_CMD_HELP_TEXT("Media Independent Interface (MII) unit as well as allowin
 BAREBOX_CMD_HELP_TEXT("register dummy PHY devices for raw MDIO access. Most fast ethernet")
 BAREBOX_CMD_HELP_TEXT("adapters use an MII to autonegotiate link speed and duplex setting.")
 BAREBOX_CMD_HELP_TEXT("")
+BAREBOX_CMD_HELP_TEXT("When run without options, shows status of all PHYs.")
+BAREBOX_CMD_HELP_TEXT("")
 BAREBOX_CMD_HELP_TEXT("Options:")
 BAREBOX_CMD_HELP_OPT("-v", "increase verbosity")
-BAREBOX_CMD_HELP_OPT("-s <devpath/devname>", "show PHY status (not providing PHY prints status of all)")
+BAREBOX_CMD_HELP_OPT("-s <devpath/devname>", "show PHY status for specified device")
 BAREBOX_CMD_HELP_OPT("-r <busno>:<adr>", "register a PHY")
 BAREBOX_CMD_HELP_END
 

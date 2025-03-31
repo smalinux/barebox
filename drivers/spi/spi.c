@@ -92,7 +92,7 @@ struct spi_device *spi_new_device(struct spi_controller *ctrl,
 	proxy->bits_per_word = chip->bits_per_word ? chip->bits_per_word : 8;
 	proxy->dev.platform_data = chip->platform_data;
 	proxy->dev.bus = &spi_bus;
-	dev_set_name(&proxy->dev, chip->name);
+	dev_set_name(&proxy->dev, "%s", chip->name);
 	/* allocate a free id for this chip */
 	proxy->dev.id = DEVICE_ID_DYNAMIC;
 	proxy->dev.type_data = proxy;
@@ -463,9 +463,7 @@ static int spi_transfer_one_message(struct spi_device *spi, struct spi_message *
 		if (msg->status != -EINPROGRESS)
 			goto out;
 
-		/* TODO: Convert to new spi_delay API */
-		if (xfer->delay_usecs)
-			udelay(xfer->delay_usecs);
+		spi_delay_exec(&xfer->delay, NULL);
 
 		if (xfer->cs_change) {
 			if (list_is_last(&xfer->transfer_list,

@@ -21,16 +21,18 @@ static void __noreturn psci_invoke_noreturn(ulong function)
 
 	ret = psci_invoke(function, 0, 0, 0, NULL);
 
-	pr_err("psci command failed: %s\n", strerror(-ret));
+	pr_err("psci command failed: %pe\n", ERR_PTR(ret));
 	hang();
 }
 
-static void __noreturn psci_poweroff(struct poweroff_handler *handler)
+static void __noreturn psci_poweroff(struct poweroff_handler *handler,
+				     unsigned long flags)
 {
 	psci_invoke_noreturn(ARM_PSCI_0_2_FN_SYSTEM_OFF);
 }
 
-static void __noreturn psci_restart(struct restart_handler *rst)
+static void __noreturn psci_restart(struct restart_handler *rst,
+				    unsigned long flags)
 {
 	psci_invoke_noreturn(ARM_PSCI_0_2_FN_SYSTEM_RESET);
 }
@@ -115,12 +117,13 @@ static int of_psci_do_fixup(struct device_node *root, void *method)
 
 static int __init psci_probe(struct device *dev)
 {
+	struct param_d *param;
 	const char *method;
 	ulong of_version, actual_version;
 	int ret;
 
-	ret = dev_get_drvdata(dev, (const void **)&of_version);
-	if (ret)
+	of_version = (uintptr_t)device_get_match_data(dev);
+	if (!of_version)
 		return -ENODEV;
 
 	ret = of_property_read_string(dev->of_node, "method", &method);
@@ -152,27 +155,35 @@ static int __init psci_probe(struct device *dev)
 	psci_invoke(ARM_PSCI_0_2_FN_PSCI_VERSION, 0, 0, 0, &actual_version);
 	version = actual_version;
 
-	dev_info(dev, "detected version %u.%u\n",
-		 version >> 16, version & 0xffff);
+	param = dev_add_param_fixed(dev, "version", "%u.%u",
+				    version >> 16, version & 0xffff);
+	if (!IS_ERR_OR_NULL(param))
+		dev_info(dev, "detected version %s\n", get_param_value(param));
+
+	dev_add_param_fixed(dev, "method", "%s", method);
 
 	if (actual_version != of_version)
 		of_register_fixup(of_psci_do_fixup, (void *)method);
 
 	ret = poweroff_handler_register_fn(psci_poweroff);
 	if (ret)
-		dev_warn(dev, "error registering poweroff handler: %s\n",
-			 strerror(-ret));
+		dev_warn(dev, "error registering poweroff handler: %pe\n",
+			 ERR_PTR(ret));
 
 	restart.name = "psci";
 	restart.restart = psci_restart;
 	restart.priority = 400;
 
 	ret = restart_handler_register(&restart);
-	if (ret)
-		dev_warn(dev, "error registering restart handler: %s\n",
-			 strerror(-ret));
+	if (ret) {
+		dev_warn(dev, "error registering restart handler: %pe\n",
+			 ERR_PTR(ret));
+		return ret;
+	}
 
-	return ret;
+	dev_add_alias(dev, "psci");
+
+	return 0;
 }
 
 static __maybe_unused struct of_device_id psci_dt_ids[] = {

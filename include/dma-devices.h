@@ -2,6 +2,8 @@
 #ifndef __DMA_DEVICES_H
 #define __DMA_DEVICES_H
 
+#include <linux/types.h>
+
 /**
  * enum dma_transfer_direction - dma transfer mode and direction indicator
  * @DMA_MEM_TO_MEM: Async/Memcpy mode
@@ -38,7 +40,7 @@ struct of_phandle_args;
  * The uclass interface is implemented by all DMA devices which use
  * driver model.
  */
-struct dma_ops {
+struct dma_device_ops {
 	/**
 	 * of_xlate - Translate a client's device-tree (OF) DMA specifier.
 	 *
@@ -153,7 +155,7 @@ struct dma_ops {
 
 struct dma_device {
 	struct device *dev;
-	const struct dma_ops *ops;
+	const struct dma_device_ops *ops;
 	struct list_head list;
 };
 

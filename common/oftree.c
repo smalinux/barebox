@@ -304,7 +304,7 @@ int of_fixup_reserved_memory(struct device_node *root, void *_res)
 
 	child = of_get_child_by_name(node, res->name) ?: of_new_node(node, res->name);
 
-	if (res->flags & IORESOURCE_BUSY)
+	if (is_reserved_resource(res))
 		of_property_write_bool(child, "no-map", true);
 
 	of_write_number(reg, res->start, addr_n_cells);
@@ -383,6 +383,7 @@ int of_unregister_fixup(int (*fixup)(struct device_node *, void *),
 	list_for_each_entry(of_fixup, &of_fixup_list, list) {
 		if (of_fixup->fixup == fixup && of_fixup->context == context) {
 			list_del(&of_fixup->list);
+			free(of_fixup);
 			return 0;
 		}
 	}
@@ -407,21 +408,20 @@ void of_fix_tree(struct device_node *node)
 
 		ret = of_fixup->fixup(node, of_fixup->context);
 		if (ret)
-			pr_warn("Failed to fixup node in %pS: %s\n",
-					of_fixup->fixup, strerror(-ret));
+			pr_warn("Failed to fixup node in %pS: %pe\n",
+					of_fixup->fixup, ERR_PTR(ret));
 	}
 }
 
 /*
- * Get the fixed fdt. This function uses the fdt input pointer
+ * Get the fdt. This function uses the fdt input pointer
  * if provided or the barebox internal devicetree if not.
- * It increases the size of the tree and applies the registered
- * fixups.
  */
-struct fdt_header *of_get_fixed_tree(const struct device_node *node)
+struct fdt_header *of_get_flattened_tree(const struct device_node *node,
+					 bool fixup)
 {
 	struct fdt_header *fdt = NULL;
-	struct device_node *np;
+	struct device_node *np = NULL;
 
 	if (!node) {
 		node = of_get_root_node();
@@ -429,16 +429,19 @@ struct fdt_header *of_get_fixed_tree(const struct device_node *node)
 			return NULL;
 	}
 
-	np = of_dup(node);
+	if (fixup)
+		node = np = of_dup(node);
 
-	if (!np)
+	if (!node)
 		return NULL;
 
-	of_fix_tree(np);
+	if (fixup)
+		of_fix_tree(np);
 
-	fdt = of_flatten_dtb(np);
+	fdt = of_flatten_dtb((struct device_node *)node);
 
-	of_delete_node(np);
+	if (fixup)
+		of_delete_node(np);
 
 	return fdt;
 }

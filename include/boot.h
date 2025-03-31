@@ -5,21 +5,8 @@
 #include <of.h>
 #include <menu.h>
 #include <environment.h>
-
-#ifdef CONFIG_FLEXIBLE_BOOTARGS
-const char *linux_bootargs_get(void);
-int linux_bootargs_overwrite(const char *bootargs);
-#else
-static inline const char *linux_bootargs_get(void)
-{
-	return getenv("bootargs");
-}
-
-static inline int linux_bootargs_overwrite(const char *bootargs)
-{
-	return setenv("bootargs", bootargs);
-}
-#endif
+#include <bootm-overrides.h>
+#include <bootargs.h>
 
 struct bootentries {
 	struct list_head entries;
@@ -33,11 +20,18 @@ struct bootentry {
 	char *description;
 	int (*boot)(struct bootentry *entry, int verbose, int dryrun);
 	void (*release)(struct bootentry *entry);
+	struct bootm_overrides overrides;
 };
 
 int bootentries_add_entry(struct bootentries *entries, struct bootentry *entry);
 
-int bootentry_register_provider(int (*fn)(struct bootentries *bootentries, const char *name));
+struct bootentry_provider {
+	int (*generate)(struct bootentries *bootentries, const char *name);
+	/* internal fields */
+	struct list_head list;
+};
+
+int bootentry_register_provider(struct bootentry_provider *provider);
 
 #define bootentries_for_each_entry(bootentries, entry) \
 	list_for_each_entry(entry, &bootentries->entries, list)

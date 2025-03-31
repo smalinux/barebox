@@ -7,13 +7,14 @@ targets:
         cpu: M14Kc
         memory: 256M
         bios: barebox-qemu-malta.img
-        extra_args: ''
+        display: qemu-default
       BareboxDriver:
         prompt: 'barebox@[^:]+:[^ ]+ '
         bootstring: 'commandline:'
       BareboxTestStrategy: {}
     features:
       - virtio-pci
+      - testfs
 images:
   barebox-qemu-malta.img: !template "$LG_BUILDDIR/images/barebox-qemu-malta.img"
 imports:

@@ -40,14 +40,6 @@ static inline struct dwcmshc_host *priv_from_mci_host(struct mci_host *h)
 	return container_of(h, struct dwcmshc_host, mci);
 }
 
-static void mci_setup_cmd(struct mci_cmd *p, unsigned int cmd, unsigned int arg,
-			  unsigned int response)
-{
-	p->cmdidx = cmd;
-	p->cmdarg = arg;
-	p->resp_type = response;
-}
-
 static int do_abort_sequence(struct mci_host *mci, struct mci_cmd *current_cmd)
 {
 	int ret = 0;
@@ -161,12 +153,14 @@ static int do_send_cmd(struct mci_host *mci, struct mci_cmd *cmd,
 	sdhci_write16(&host->sdhci, SDHCI_COMMAND, command);
 
 	ret = sdhci_wait_for_done(&host->sdhci, SDHCI_INT_CMD_COMPLETE);
-	if (ret)
+	if (ret) {
+		sdhci_teardown_data(&host->sdhci, data, dma);
 		goto error;
+	}
 
 	sdhci_read_response(&host->sdhci, cmd);
 
-	ret = sdhci_transfer_data(&host->sdhci, data, dma);
+	ret = sdhci_transfer_data(&host->sdhci, cmd, data, dma);
 error:
 	if (ret) {
 		sdhci_reset(&host->sdhci, SDHCI_RESET_CMD);
@@ -331,6 +325,8 @@ static int dwcmshc_probe(struct device *dev)
 	host->sdhci.base = IOMEM(iores->start);
 	host->sdhci.mci = mci;
 	host->sdhci.max_clk = clk_get_rate(clk);
+	/* HS200 not supported by this driver at the moment */
+	host->sdhci.quirks2 = SDHCI_QUIRK2_BROKEN_HS200;
 	host->cb = dwcmshc_cb;
 
 	mci->hw_dev = dev;

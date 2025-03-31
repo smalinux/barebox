@@ -239,7 +239,7 @@ retry:
 		if (mtd_is_eccerr(err) && retries++ < MTD_IO_RETRIES)
 			goto retry;
 
-		dev_err(&mtd->dev, "error %d%s while reading %d bytes from PEB %d:%d\n",
+		dev_dbg(&mtd->dev, "error %d%s while reading %d bytes from PEB %d:%d\n",
 			err, errstr, len, pnum, offset);
 		return err;
 	}
@@ -793,7 +793,7 @@ int mtd_peb_create_bitflips(struct mtd_info *mtd, int pnum, int offset,
 	ret = 0;
 err:
 	if (ret)
-		dev_err(&mtd->dev, "Failed to create bitflips: %s\n", strerror(-ret));
+		dev_err(&mtd->dev, "Failed to create bitflips: %pe\n", ERR_PTR(ret));
 
 	free(buf);
 	free(oobbuf);

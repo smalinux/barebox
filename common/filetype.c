@@ -18,6 +18,7 @@
 #include <image-sparse.h>
 #include <elf.h>
 #include <linux/zstd.h>
+#include <fuzz.h>
 
 #include <mach/imx/imx-header.h>
 
@@ -28,6 +29,7 @@ struct filetype_str {
 
 static const struct filetype_str filetype_str[] = {
 	[filetype_unknown] = { "unknown", "unknown" },
+	[filetype_empty] = { "empty", "empty" },
 	[filetype_arm_zimage] = { "ARM Linux zImage", "arm-zimage" },
 	[filetype_lzo_compressed] = { "LZO compressed", "lzo" },
 	[filetype_lz4_compressed] = { "LZ4 compressed", "lz4" },
@@ -83,6 +85,10 @@ static const struct filetype_str filetype_str[] = {
 	[filetype_rockchip_rkns_image] = { "Rockchip boot image", "rk-image" },
 	[filetype_fip] = { "TF-A Firmware Image Package", "fip" },
 	[filetype_zstd_compressed] = { "ZSTD compressed", "zstd" },
+	[filetype_rockchip_rkss_image] = { "Rockchip signed boot image",
+					   "rk-image" },
+	[filetype_x86_linux_image] = { "x86 Linux image", "x86-linux" },
+	[filetype_x86_efi_linux_image] = { "x86 Linux/EFI image", "x86-efi-linux" },
 };
 
 static const char *file_type_to_nr_string(enum filetype f)
@@ -383,6 +389,8 @@ enum filetype file_detect_type(const void *_buf, size_t bufsize)
 
 	if (strncmp(buf8, "RKNS", 4) == 0)
 		return filetype_rockchip_rkns_image;
+	if (strncmp(buf8, "RKSS", 4) == 0)
+		return filetype_rockchip_rkss_image;
 	if (le32_to_cpu(buf[0]) == le32_to_cpu(0xaa640001))
 		return filetype_fip;
 
@@ -423,12 +431,14 @@ enum filetype file_detect_type(const void *_buf, size_t bufsize)
 	if (bufsize < 64)
 		return filetype_unknown;
 
-	if (le32_to_cpu(buf[14]) == 0x644d5241)
+	if (is_arm64_linux_bootimage(buf))
 		return is_dos_exe(buf8) ? filetype_arm64_efi_linux_image : filetype_arm64_linux_image;
-	if (le32_to_cpu(buf[14]) == 0x05435352)
+	if (is_riscv_linux_bootimage(buf))
 		return is_dos_exe(buf8) ? filetype_riscv_efi_linux_image : filetype_riscv_linux_image;
-	if (le32_to_cpu(buf[14]) == 0x56435352 && !memcmp(&buf[12], "barebox", 8))
+	if (is_riscv_linux_bootimage(buf) && !memcmp(&buf[12], "barebox", 8))
 		return filetype_riscv_barebox_image;
+	if (bufsize > 0x206 && is_x86_linux_bootimage(buf))
+		return is_dos_exe(buf8) ? filetype_x86_efi_linux_image : filetype_x86_linux_image;
 
 	if (le32_to_cpu(buf[5]) == 0x504d5453)
 		return filetype_mxs_bootstream;
@@ -494,6 +504,17 @@ enum filetype file_detect_type(const void *_buf, size_t bufsize)
 	return filetype_unknown;
 }
 
+static int fuzz_filetype(const u8 *data, size_t size)
+{
+	if (!PTR_IS_ALIGNED(data, sizeof(u64)))
+	    return -EINVAL;
+
+	file_detect_type(data, size);
+
+	return 0;
+}
+fuzz_test("filetype", fuzz_filetype);
+
 int file_name_detect_type_offset(const char *filename, loff_t pos, enum filetype *type,
 				 enum filetype (*detect)(const void *buf, size_t bufsize))
 {
@@ -510,7 +531,7 @@ int file_name_detect_type_offset(const char *filename, loff_t pos, enum filetype
 	if (ret < 0)
 		goto err_out;
 
-	*type = detect(buf, ret);
+	*type = ret ? detect(buf, ret) : filetype_empty;
 
 	ret = 0;
 err_out:

@@ -7,6 +7,7 @@ targets:
         cpu: Nehalem
         memory: 1024M
         kernel: barebox.efi
+        display: qemu-default
         extra_args: '-bios OVMF.fd'
       BareboxDriver:
         prompt: 'barebox@[^:]+:[^ ]+ '
@@ -14,8 +15,15 @@ targets:
       BareboxTestStrategy: {}
     features:
       - pci
+    devices:
+      fb0: 'Type: primary'
+      fbconsole0: 'Parent: fb0'
+      wdog0: 'Parent: efi-wdt'
+      efivarfs0: 'Driver: efivarfs'
+      'pci-8086:1237.0': 'Bus: pci'
+      efifs0: 'Driver: efifs'
+      acpi-APIC0: 'Signature: APIC (Multiple APIC Description Table)'
     runner:
-      tuxmake_arch: x86_64
       kconfig_add:
         - CONFIG_DRIVER_SERIAL_NS16550=y
         - CONFIG_CONSOLE_ACTIVATE_FIRST=y # avoid duplicate output

@@ -14,6 +14,9 @@ config ARM
 	select PBL_RELOCATABLE
 	select USE_COMPRESSED_DTB
 	select HAVE_ARCH_BOARD_GENERIC_DT if OFDEVICE
+	select HAVE_ARCH_BOOTM_OFTREE
+	select HW_HAS_PCI
+	select ARCH_HAS_DMA_WRITE_COMBINE
 	default y
 
 config ARCH_LINUX_NAME
@@ -88,7 +91,6 @@ config ARCH_MVEBU
 	select COMMON_CLK_OF_PROVIDER
 	select GPIOLIB
 	select HAS_DEBUG_LL
-	select HW_HAS_PCI
 	select MVEBU_MBUS
 	select OFTREE
 	select OF_ADDRESS_PCI
@@ -109,10 +111,7 @@ config ARCH_PXA
 
 config ARCH_SOCFPGA
 	bool "Altera SOCFPGA"
-	depends on 32BIT
 	select HAS_DEBUG_LL
-	select ARM_SMP_TWD
-	select CPU_V7
 	select COMMON_CLK
 
 config ARCH_TEGRA
@@ -120,7 +119,6 @@ config ARCH_TEGRA
 	depends on 32BIT
 	select CPU_V7
 	select HAS_DEBUG_LL
-	select HW_HAS_PCI
 	select COMMON_CLK
 	select COMMON_CLK_OF_PROVIDER
 	select GPIOLIB
@@ -144,8 +142,9 @@ config ARCH_ARM64_VIRT
 	select CPU_V8
 	select ARM_AMBA
 	select BOARD_ARM_VIRT
-	select HW_HAS_PCI
 	select HAS_DEBUG_LL
+	select COMMON_CLK
+	select COMMON_CLK_OF_PROVIDER
 
 config ARCH_BCM283X
 	bool "Broadcom BCM283x based boards"
@@ -190,7 +189,6 @@ config ARCH_LAYERSCAPE
 	select HAS_DEBUG_LL
 	select COMMON_CLK
 	select COMMON_CLK_OF_PROVIDER
-	select HW_HAS_PCI
 	select OF_DMA_COHERENCY
 
 config ARCH_OMAP_MULTI
@@ -211,6 +209,10 @@ config ARCH_ROCKCHIP
 	select PINCTRL_ROCKCHIP
 	select HAS_DEBUG_LL
 	imply GPIO_ROCKCHIP
+
+config ARCH_SAMSUNG
+	bool "ARM Exynos boards"
+	depends on ARCH_MULTIARCH
 
 config ARCH_STM32MP
 	bool "STMicroelectronics STM32MP"
@@ -268,6 +270,7 @@ source "arch/arm/mach-k3/Kconfig"
 source "arch/arm/mach-omap/Kconfig"
 source "arch/arm/mach-pxa/Kconfig"
 source "arch/arm/mach-rockchip/Kconfig"
+source "arch/arm/mach-samsung/Kconfig"
 source "arch/arm/mach-socfpga/Kconfig"
 source "arch/arm/mach-sunxi/Kconfig"
 source "arch/arm/mach-stm32mp/Kconfig"
@@ -325,7 +328,7 @@ config THUMB2_BAREBOX
 
 config ARM_BOARD_APPEND_ATAG
 	bool "Let board specific code to add ATAGs to be passed to the kernel"
-	depends on ARM_LINUX && !CPU_V8
+	depends on BOOT_ATAGS
 	help
 	  This option is purely to start some vendor provided kernels.
 	  ** DO NOT USE FOR YOUR OWN DESIGNS! **
@@ -376,6 +379,16 @@ config ARM_EXCEPTIONS
 	bool "enable arm exception handling support"
 	default y
 
+config ARM_EXCEPTIONS_PBL
+	select ARCH_HAS_DATA_ABORT_MASK_PBL
+	depends on CPU_V7 || CPU_V8
+	bool "enable arm exception handling support in PBL"
+	help
+	  Say yes here to enable exception handling in PBL. Note that the exception
+	  table has to be initialized by calling arm_pbl_init_exceptions(). This is
+	  done in barebox_pbl_start(). If you need exception handling earlier then
+	  you have to call arm_pbl_init_exceptions() earlier from your board code.
+
 config ARM_UNWIND
 	bool "enable stack unwinding support"
 	depends on AEABI
@@ -386,6 +399,18 @@ config ARM_UNWIND
 	  compiler. The resulting kernel image is slightly bigger but
 	  the performance is not affected. Currently, this feature
 	  only works with EABI compilers. If unsure say Y.
+
+config ARM_MMU_PERMISSIONS
+	bool "Map with extended RO/X permissions"
+	default y
+	help
+	  Enable this option to map readonly sections as readonly, executable
+	  sections as readonly/executable and the remainder of the SDRAM as
+	  read/write/non-executable.
+	  Traditionally barebox maps the whole SDRAM as read/write/execute.
+	  You get this behaviour by disabling this option which is meant as
+	  a debugging facility. It can go away once the extended permission
+	  settings are proved to work reliable.
 
 config ARM_SEMIHOSTING
 	bool "enable ARM semihosting support"
@@ -464,6 +489,35 @@ config ARM_MODULE_PLTS
 
 	  Say y if your memory configuration puts the heap to far away from the
 	  barebox image, causing relocation out of range errors
+
+config BOOT_ATAGS
+	bool "Support booting with legacy ATAGS mechanism"
+	depends on ARM_LINUX && ARM32
+	help
+	  Add support for passing hardware information with the legacy ATAGS
+	  mechanism that preceded OpenFirmware device trees.
+
+	  Unless you have a very old kernel, say n here and enable BOOTM_OFTREE
+	  instead.
+
+config ARM_BOOTM_ELF
+	bool
+	depends on BOOTM
+	select ELF
+	prompt "elf loading support"
+	help
+	  Add support to load elf file with bootm.
+
+config ARM_BOOTM_FIP
+	bool
+	depends on BOOTM
+	select FIP
+	prompt "FIP loading support"
+	default ARCH_STM32MP
+	help
+	  Add support to load FIP file with bootm.
+	  This allows barebox to chainload barebox on platforms where it
+	  is located inside a FIP. This can be useful during development.
 
 config ARM_ATF
 	bool

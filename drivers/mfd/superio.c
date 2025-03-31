@@ -68,7 +68,6 @@ void superio_chip_add(struct superio_chip *siochip)
 {
 	struct regmap *regmap;
 	char *chipname;
-	char str[5];
 	int ret;
 
 	chipname = xasprintf("superio-%04x:%04x@%02x",
@@ -79,10 +78,8 @@ void superio_chip_add(struct superio_chip *siochip)
 
 	siochip->dev->priv = siochip;
 
-	sprintf(str, "%04x", siochip->vid);
-	dev_add_param_fixed(siochip->dev, "vendor", str);
-	sprintf(str, "%04x", siochip->devid);
-	dev_add_param_fixed(siochip->dev, "device", str);
+	dev_add_param_uint32_fixed(siochip->dev, "vendor", siochip->vid, "%04x");
+	dev_add_param_uint32_fixed(siochip->dev, "device", siochip->devid, "%04x");
 
 	regmap = regmap_init(siochip->dev, &superio_regmap_bus, siochip,
 			     &superio_regmap_config);
@@ -91,7 +88,7 @@ void superio_chip_add(struct superio_chip *siochip)
 
 	ret = regmap_register_cdev(regmap, chipname);
 	if (ret)
-		pr_warn("registering %s regmap cdev failed: %s\n",
-			chipname, strerror(-ret));
+		pr_warn("registering %s regmap cdev failed: %pe\n",
+			chipname, ERR_PTR(ret));
 }
 EXPORT_SYMBOL(superio_chip_add);

@@ -8,7 +8,7 @@
 static int do_bootm_linux(struct image_data *data)
 {
 	void (*fn)(unsigned long a0, unsigned long dtb, unsigned long a2);
-	phys_addr_t devicetree;
+	phys_addr_t devicetree = 0;
 	long hartid = riscv_hartid();
 	int ret;
 
@@ -42,12 +42,6 @@ static struct image_handler riscv_linux_efi_handler = {
         .filetype = filetype_riscv_efi_linux_image,
 };
 
-static struct image_handler riscv_fit_handler = {
-	.name = "FIT image",
-	.bootm = do_bootm_linux,
-	.filetype = filetype_oftree,
-};
-
 static struct image_handler riscv_barebox_handler = {
         .name = "RISC-V barebox image",
         .bootm = do_bootm_linux,
@@ -59,9 +53,6 @@ static int riscv_register_image_handler(void)
 	register_image_handler(&riscv_linux_handler);
 	register_image_handler(&riscv_linux_efi_handler);
 	register_image_handler(&riscv_barebox_handler);
-
-	if (IS_ENABLED(CONFIG_FITIMAGE))
-		register_image_handler(&riscv_fit_handler);
 
 	return 0;
 }

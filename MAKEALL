@@ -101,9 +101,12 @@ with_logs_collected() {
 
 	if [ -n "${logdir}" ]; then
 		"$@" 2>&1 > "${log_report}" | tee "${log_err}"
+		check_pipe_status
 	else
 		"$@"
 	fi
+
+	return $?
 }
 
 report() {
@@ -132,7 +135,11 @@ do_build_defconfig() {
 	[ -n "$logdir" ] && mkdir -p "${logdir}/${defconfig}"
 
 	MAKE="make -j${JOBS} ARCH=${arch} O=${BUILDDIR}"
-	${MAKE} ${defconfig} &>/dev/null
+	shuffle=$(${MAKE} --debug=basic ${defconfig} 2>&1 | sed -n 's/.*Enabled shuffle mode: //p' | head -n1)
+
+	if [ -n "$shuffle" ]; then
+		report "Probing ${arch} ${defconfig} (--shuffle=$shuffle)\n" >&2
+	fi
 
 	if [ ${arch} = "arm" ]; then
 		grep -q "CONFIG_ARM64=y" ${BUILDDIR}/.config
@@ -169,7 +176,6 @@ do_build_defconfig() {
 	done
 	with_logs_collected ${MAKE} $silent_flag olddefconfig
 
-	check_pipe_status
 	configure_result="$?"
 
 	report "Configure: "
@@ -178,8 +184,6 @@ do_build_defconfig() {
 		report "OK     \n"
 
 		with_logs_collected ${MAKE} $silent_flag ${TARGET}
-
-		check_pipe_status
 		compile_result="$?"
 
 		report "Compile: " ${defconfig}
@@ -219,7 +223,9 @@ do_build_defconfig() {
 }
 
 if command -v labgrid-pytest >/dev/null; then
-	alias pytest=labgrid-pytest
+	pytest=labgrid-pytest
+else
+	pytest=pytest
 fi
 
 do_test_defconfig() {
@@ -229,9 +235,7 @@ do_test_defconfig() {
 	local step_time_start=$(date +%s)
 	local err=0
 
-	LG_BUILDDIR=$BUILDDIR with_logs_collected pytest --lg-env $yaml "$@"
-
-	check_pipe_status
+	LG_BUILDDIR=$BUILDDIR with_logs_collected $pytest --lg-env $yaml "$@"
 	compile_result="$?"
 
 	report "Test: " ${yaml}

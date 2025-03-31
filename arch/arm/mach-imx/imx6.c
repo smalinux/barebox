@@ -31,8 +31,16 @@
 #define MX6_OCOTP_CFG0			0x410
 #define MX6_OCOTP_CFG1			0x420
 
+#define BM_MPR_MPROT1_MTW		(0x1 << 25)
+
 static void imx6_configure_aips(void __iomem *aips)
 {
+	u32 mpr = readl(aips);
+
+	/* Bail if CPU ist not trusted for write accesses. */
+	if (!(mpr & BM_MPR_MPROT1_MTW))
+		return;
+
 	/*
 	 * Set all MPROTx to be non-bufferable, trusted for R/W,
 	 * not forced to user-mode.
@@ -246,7 +254,7 @@ int imx6_devices_init(void)
 	return 0;
 }
 
-static bool imx6_cannot_write_l2x0(void)
+bool imx6_cannot_write_l2x0(void)
 {
 	void __iomem *l2x0_base = IOMEM(0x00a02000);
 	u32 val;
@@ -358,7 +366,8 @@ static int imx6_fixup_cpus_register(void)
 }
 device_initcall(imx6_fixup_cpus_register);
 
-void __noreturn imx6_pm_stby_poweroff(struct poweroff_handler *handler)
+void __noreturn imx6_pm_stby_poweroff(struct poweroff_handler *handler,
+				      unsigned long flags)
 {
 	void *ccm_base = IOMEM(MX6_CCM_BASE_ADDR);
 	void *gpc_base = IOMEM(MX6_GPC_BASE_ADDR);

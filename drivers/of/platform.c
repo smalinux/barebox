@@ -7,10 +7,12 @@
  * based on Linux devicetree support
  */
 #include <common.h>
+#include <driver.h>
 #include <deep-probe.h>
 #include <malloc.h>
 #include <of.h>
 #include <of_address.h>
+#include <of_device.h>
 #include <linux/amba/bus.h>
 #include <mmu.h>
 
@@ -36,41 +38,6 @@ struct device *of_find_device_by_node(struct device_node *np)
 	return NULL;
 }
 EXPORT_SYMBOL(of_find_device_by_node);
-
-/**
- * of_device_make_bus_id - Use the device node data to assign a unique name
- * @dev: pointer to device structure that is linked to a device tree node
- *
- * This routine will first try using the translated bus address to
- * derive a unique name. If it cannot, then it will prepend names from
- * parent nodes until a unique name can be derived.
- */
-static void of_device_make_bus_id(struct device *dev)
-{
-	struct device_node *node = dev->of_node;
-	const __be32 *reg;
-	u64 addr;
-
-	/* Construct the name, using parent nodes if necessary to ensure uniqueness */
-	while (node->parent) {
-		/*
-		 * If the address can be translated, then that is as much
-		 * uniqueness as we need. Make it the first component and return
-		 */
-		reg = of_get_property(node, "reg", NULL);
-		if (reg && (addr = of_translate_address(node, reg)) != OF_BAD_ADDR) {
-			dev_set_name(dev, dev->name ? "%llx.%s:%s" : "%llx.%s.of",
-				     (unsigned long long)addr, node->name,
-				     dev->name);
-			return;
-		}
-
-		/* format arguments only used if dev_name() resolves to NULL */
-		dev_set_name(dev, dev->name ? "%s:%s" : "%s.of",
-			     kbasename(node->full_name), dev->name);
-		node = node->parent;
-	}
-}
 
 static struct device_node *of_get_next_dma_parent(const struct device_node *np)
 {
@@ -314,6 +281,31 @@ struct device *of_device_enable_and_register_by_alias(const char *alias)
 }
 EXPORT_SYMBOL(of_device_enable_and_register_by_alias);
 
+struct device *of_add_child_device(struct device *parent,
+		const char* devname, int id, struct device_node *np)
+{
+	struct device *dev;
+	int err;
+
+	if (!of_property_present(np, "compatible") || !of_device_is_available(np))
+		return NULL;
+
+	dev = device_alloc(devname, id);
+	dev->parent = parent;
+	dev->of_node = np;
+
+	np->dev = dev;
+	err = platform_device_register(dev);
+	if (err) {
+		np->dev = NULL;
+		free_device(dev);
+		return ERR_PTR(err);
+	}
+
+	return dev;
+}
+EXPORT_SYMBOL(of_add_child_device);
+
 #ifdef CONFIG_ARM_AMBA
 static struct device *of_amba_device_create(struct device_node *np)
 {
@@ -373,14 +365,14 @@ static inline struct device *of_amba_device_create(struct device_node *np)
 
 /**
  * of_platform_bus_create() - Create a device for a node and its children.
- * @bus: device node of the bus to instantiate
+ * @node: device node of the bus to instantiate
  * @matches: match table for bus nodes
  * @parent: parent for new device, or NULL for top level.
  *
  * Creates a platform_device for the provided device_node, and optionally
  * recursively create devices for all the child nodes.
  */
-static int of_platform_bus_create(struct device_node *bus,
+static int of_platform_bus_create(struct device_node *node,
 				const struct of_device_id *matches,
 				struct device *parent)
 {
@@ -389,22 +381,22 @@ static int of_platform_bus_create(struct device_node *bus,
 	int rc = 0;
 
 	/* Make sure it has a compatible property */
-	if (!of_get_property(bus, "compatible", NULL)) {
+	if (!of_get_property(node, "compatible", NULL)) {
 		pr_debug("%s() - skipping %pOF, no compatible prop\n",
-			__func__, bus);
+			__func__, node);
 		return 0;
 	}
 
-	if (of_device_is_compatible(bus, "arm,primecell")) {
-		if (of_amba_device_create(bus))
+	if (of_device_is_compatible(node, "arm,primecell")) {
+		if (of_amba_device_create(node))
 			return 0;
 	}
 
-	dev = of_platform_device_create(bus, parent);
-	if (!dev || !of_match_node(matches, bus))
+	dev = of_platform_device_create(node, parent);
+	if (!dev || !of_match_node(matches, node))
 		return 0;
 
-	for_each_child_of_node(bus, child) {
+	for_each_child_of_node(node, child) {
 		pr_debug("   create child: %pOF\n", child);
 		rc = of_platform_bus_create(child, matches, dev);
 		if (rc)

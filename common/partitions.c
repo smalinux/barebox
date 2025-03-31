@@ -17,6 +17,9 @@
 #include <linux/err.h>
 #include <partitions.h>
 #include <range.h>
+#include <fuzz.h>
+#include <globalvar.h>
+#include <magicvar.h>
 
 static LIST_HEAD(partition_parser_list);
 
@@ -69,6 +72,21 @@ static int register_one_partition(struct block_device *blk, struct partition *pa
 	return 0;
 out:
 	free(partition_name);
+	return ret;
+}
+
+static int remove_one_partition(struct block_device *blk, int no)
+{
+	char *partition_name;
+	int ret;
+
+	partition_name = basprintf("%s.%d", blk->cdev.name, no);
+	if (!partition_name)
+		return -ENOMEM;
+
+	ret = devfs_del_partition(partition_name);
+	free(partition_name);
+
 	return ret;
 }
 
@@ -163,6 +181,51 @@ int partition_table_write(struct partition_desc *pdesc)
 	return pdesc->parser->write(pdesc);
 }
 
+bool partition_is_free(struct partition_desc *pdesc, uint64_t start, uint64_t size)
+{
+	struct partition *p;
+
+	if (start < PARTITION_ALIGN_SECTORS)
+		return false;
+
+	if (start + size >= pdesc->blk->num_blocks)
+		return false;
+
+	list_for_each_entry(p, &pdesc->partitions, list) {
+		if (region_overlap_size(p->first_sec, p->size, start, size))
+			return false;
+	}
+
+	return true;
+}
+
+int partition_find_free_space(struct partition_desc *pdesc, uint64_t sectors, uint64_t *start)
+{
+	struct partition *p;
+	uint64_t min_sec = PARTITION_ALIGN_SECTORS;
+
+	if (min_sec < partition_first_usable_lba())
+		min_sec = partition_first_usable_lba();
+
+	min_sec = ALIGN(min_sec, PARTITION_ALIGN_SECTORS);
+
+	if (partition_is_free(pdesc, min_sec, sectors)) {
+		*start = min_sec;
+		return 0;
+	}
+
+	list_for_each_entry(p, &pdesc->partitions, list) {
+		uint64_t s = ALIGN(p->first_sec + p->size, PARTITION_ALIGN_SECTORS);
+
+		if (partition_is_free(pdesc, s, sectors)) {
+			*start = s;
+			return 0;
+		}
+	}
+
+	return -ENOSPC;
+}
+
 int partition_create(struct partition_desc *pdesc, const char *name,
 		     const char *fs_type, uint64_t lba_start, uint64_t lba_end)
 {
@@ -181,10 +244,16 @@ int partition_create(struct partition_desc *pdesc, const char *name,
 		return -EINVAL;
 	}
 
+	if (lba_start < partition_first_usable_lba()) {
+		pr_err("partition starts before first usable lba: %llu < %llu\n",
+		       lba_start, partition_first_usable_lba());
+		return -EINVAL;
+	}
+
 	list_for_each_entry(part, &pdesc->partitions, list) {
-		if (region_overlap_end(part->first_sec,
-				       part->first_sec + part->size - 1,
-				       lba_start, lba_end)) {
+		if (region_overlap_end_inclusive(part->first_sec,
+						 part->first_sec + part->size - 1,
+						 lba_start, lba_end)) {
 			pr_err("new partition %llu-%llu overlaps with partition %s (%llu-%llu)\n",
 			       lba_start, lba_end, part->name, part->first_sec,
 				part->first_sec + part->size - 1);
@@ -288,6 +357,46 @@ int partition_parser_register(struct partition_parser *p)
 }
 
 /**
+ * Try to collect partition information on the given block device
+ * @param blk Block device to examine
+ * @return 0 most of the time, negative value else
+ *
+ * It is not a failure if no partition information is found
+ */
+static int fuzz_partition_table_parser(struct block_device *ramdisk)
+{
+	struct partition_desc *pdesc;
+	struct partition *part;
+	int rc = 0;
+	struct partition_parser *parser;
+	u8 buf[2 * SECTOR_SIZE] __aligned(8);
+
+	rc = block_read(ramdisk, buf, 0, 2);
+	if (rc != 0)
+		return 0;
+
+	parser = partition_parser_get_by_filetype(buf);
+	if (!parser)
+		return 0;
+
+	pdesc = parser->parse(buf, ramdisk);
+	if (!pdesc)
+		return 0;
+
+	pdesc->parser = parser;
+
+	list_for_each_entry(part, &pdesc->partitions, list) {
+		register_one_partition(ramdisk, part);
+		remove_one_partition(ramdisk, part->num);
+	}
+
+	partition_table_free(pdesc);
+
+	return 0;
+}
+fuzz_test_ramdisk("partitions", fuzz_partition_table_parser);
+
+/**
  * cdev_unallocated_space - return unallocated space
  * cdev: The cdev
  *
@@ -313,3 +422,38 @@ loff_t cdev_unallocated_space(struct cdev *cdev)
 
 	return start;
 }
+
+static uint64_t first_usable_dma = SZ_8M / SECTOR_SIZE;
+
+uint64_t partition_first_usable_lba(void)
+{
+	return first_usable_dma;
+}
+
+static int set_first_usable_lba(struct param_d *p, void *priv)
+{
+	if (first_usable_dma < 1) {
+		pr_err("Minimum is 1\n");
+		return -EINVAL;
+	}
+
+	if (first_usable_dma % (SZ_1M / SECTOR_SIZE))
+		pr_warn("recommended to align to 1MiB\n");
+
+	return 0;
+}
+
+static int partitions_init(void)
+{
+	struct param_d *p = NULL;
+
+	if (IS_ENABLED(CONFIG_GLOBALVAR))
+		p = dev_add_param_uint64(&global_device, "partitions.first_usable_lba",
+					 set_first_usable_lba, NULL,
+					 &first_usable_dma, "%llu", NULL);
+
+	return PTR_ERR_OR_ZERO(p);
+}
+core_initcall(partitions_init);
+
+BAREBOX_MAGICVAR(global.partitions.first_usable_lba, "first usable LBA used for creating partitions");

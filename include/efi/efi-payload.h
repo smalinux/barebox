@@ -4,6 +4,7 @@
 
 #include <efi/types.h>
 #include <efi/efi-util.h>
+#include <efi/memtype.h>
 
 struct efi_system_table;
 struct efi_loaded_image;
@@ -27,10 +28,13 @@ static inline void *efi_get_global_var(char *name, int *var_size)
 }
 
 int efi_set_variable(char *name, efi_guid_t *vendor, uint32_t attributes,
-		     void *buf, unsigned long size);
+		     void *buf, size_t size);
 int efi_set_variable_usec(char *name, efi_guid_t *vendor, uint64_t usec);
 
-efi_physical_addr_t efi_earlymem_alloc(const struct efi_system_table *sys_table,
-				       size_t *memsize);
+void *efi_earlymem_alloc(const struct efi_system_table *sys_table,
+			 size_t memsize, enum efi_memory_type mem_type);
+
+int efi_initrd_register(void *initrd, size_t initrd_size);
+void efi_initrd_unregister(void);
 
 #endif

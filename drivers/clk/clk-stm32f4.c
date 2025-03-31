@@ -1081,7 +1081,7 @@ static struct clk_hw *stm32_register_cclk(struct device *dev,
 
 	mux->reg = reg;
 	mux->shift = shift;
-	mux->width = 2;
+	mux->mask = 3;
 	mux->flags = 0;
 
 	hw = clk_hw_register_composite(dev, name, parent_names, num_parents,
@@ -1879,7 +1879,7 @@ static void __init stm32f4_rcc_init(struct device_node *np)
 				&stm32f4_clk_lock);
 
 		if (IS_ERR(hw)) {
-			pr_warn("Unable to register %s clk\n", aux_clk->name);
+			pr_warn("Unable to register %pC clk\n", aux_clk);
 			continue;
 		}
 

@@ -4,14 +4,14 @@
  */
 
 #include <common.h>
+#include <linux/device/bus.h>
 #include <driver.h>
 #include <errno.h>
 #include <of.h>
 
-LIST_HEAD(bus_list);
-EXPORT_SYMBOL(bus_list);
+DEFINE_DEV_CLASS(bus_class, "bus");
 
-static struct bus_type *get_bus_by_name(const char *name)
+struct bus_type *get_bus_by_name(const char *name)
 {
 	struct bus_type *bus;
 
@@ -30,11 +30,10 @@ int bus_register(struct bus_type *bus)
 	if (get_bus_by_name(bus->name))
 		return -EEXIST;
 
-	bus->dev = xzalloc(sizeof(*bus->dev));
-	dev_set_name(bus->dev, bus->name);
-	bus->dev->id = DEVICE_ID_SINGLE;
+	dev_set_name(&bus->dev, "%s", bus->name);
+	bus->dev.id = DEVICE_ID_SINGLE;
 
-	ret = register_device(bus->dev);
+	ret = register_device(&bus->dev);
 	if (ret)
 		return ret;
 
@@ -42,12 +41,12 @@ int bus_register(struct bus_type *bus)
 	INIT_LIST_HEAD(&bus->device_list);
 	INIT_LIST_HEAD(&bus->driver_list);
 
-	list_add_tail(&bus->list, &bus_list);
+	class_add_device(&bus_class, &bus->dev);
 
 	return 0;
 }
 
-int device_match(struct device *dev, struct driver *drv)
+int device_match(struct device *dev, const struct driver *drv)
 {
 	if (IS_ENABLED(CONFIG_OFDEVICE) && dev->of_node &&
 	    drv->of_compatible)
@@ -59,29 +58,29 @@ int device_match(struct device *dev, struct driver *drv)
 		while (id->name) {
 			if (!strcmp(id->name, dev->name)) {
 				dev->id_entry = id;
-				return 0;
+				return true;
 			}
 			id++;
 		}
 	} else if (!strcmp(dev->name, drv->name)) {
-		return 0;
+		return true;
 	}
 
-	return -1;
+	return false;
 }
 
-int device_match_of_modalias(struct device *dev, struct driver *drv)
+int device_match_of_modalias(struct device *dev, const struct driver *drv)
 {
 	const struct platform_device_id *id = drv->id_table;
 	const char *of_modalias = NULL, *p;
 	const struct property *prop;
 	const char *compat;
 
-	if (!device_match(dev, drv))
-		return 0;
+	if (device_match(dev, drv))
+		return true;
 
 	if (!id || !IS_ENABLED(CONFIG_OFDEVICE) || !dev->of_node)
-		return -1;
+		return false;
 
 	of_property_for_each_string(dev->of_node, "compatible", prop, compat) {
 		p = strchr(compat, ',');
@@ -90,10 +89,66 @@ int device_match_of_modalias(struct device *dev, struct driver *drv)
 		for (id = drv->id_table; id->name; id++) {
 			if (!strcmp(id->name, dev->name) || !strcmp(id->name, of_modalias)) {
 				dev->id_entry = id;
-				return 0;
+				return true;
 			}
 		}
 	}
 
-	return -1;
+	return false;
 }
+
+static struct device *__bus_for_each_dev(const struct bus_type *bus, struct device *start, void *data,
+					 int (*fn)(struct device *dev, void *data), int *result)
+{
+	struct device *dev;
+	int ret;
+
+	bus_for_each_device(bus, dev) {
+		if (start) {
+			if (dev == start)
+				start = NULL;
+			continue;
+		}
+
+		ret = fn(dev, data);
+		if (ret) {
+			if (result)
+				*result = ret;
+			return dev;
+		}
+	}
+
+	return NULL;
+}
+
+int bus_for_each_dev(const struct bus_type *bus, struct device *start, void *data,
+		     int (*fn)(struct device *dev, void *data))
+{
+	int ret = 0;
+	__bus_for_each_dev(bus, start, data, fn, &ret);
+	return ret;
+}
+
+struct check_match_data {
+	device_match_t match;
+};
+
+struct device *bus_find_device(const struct bus_type *bus, struct device *start,
+			       const void *data, device_match_t match)
+{
+	return __bus_for_each_dev(bus, start, (void *)data,
+				  (int (*)(struct device *dev, void *data))match,
+				  NULL);
+}
+
+int device_match_name(struct device *dev, const void *name)
+{
+	return !strcmp(dev_name(dev), name);
+}
+EXPORT_SYMBOL_GPL(device_match_name);
+
+int device_match_of_node(struct device *dev, const void *np)
+{
+	return np && dev->of_node == np;
+}
+EXPORT_SYMBOL_GPL(device_match_of_node);

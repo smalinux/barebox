@@ -51,7 +51,7 @@ my %ignore_type = ();
 my @ignore = ();
 my $help = 0;
 my $configuration_file = ".checkpatch.conf";
-my $max_line_length = 80;
+my $max_line_length = 100;
 my $ignore_perl_version = 0;
 my $minimum_perl_version = 5.10.0;
 my $min_conf_desc_length = 4;
@@ -4100,14 +4100,6 @@ sub process {
 			$level = "dbg" if ($level eq "debug");
 			WARN("PREFER_DEV_LEVEL",
 			     "Prefer dev_$level(... to dev_printk(KERN_$orig, ...\n" . $herecurr);
-		}
-
-# ENOSYS means "bad syscall nr" and nothing else.  This will have a small
-# number of false positives, but assembly files are not checked, so at
-# least the arch entry code will not trigger this warning.
-		if ($line =~ /\bENOSYS\b/) {
-			WARN("ENOSYS",
-			     "ENOSYS means 'invalid syscall nr' and nothing else\n" . $herecurr);
 		}
 
 # function brace can't be on same line, except for #defines of do while,

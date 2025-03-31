@@ -18,6 +18,7 @@
 #include <uncompress.h>
 #include <malloc.h>
 #include <init.h>
+#include <libfile.h>
 #include <asm/unaligned.h>
 #include "barebox_default_env.h"
 
@@ -25,6 +26,7 @@ static LIST_HEAD(defaultenv_list);
 
 struct defaultenv {
 	struct list_head list;
+	const char *srcdir;
 	const char *name;
 	void *buf;
 	size_t size;
@@ -47,6 +49,8 @@ static void defaultenv_add_base(void)
 		defaultenv_append_directory(defaultenv_2_dfu);
 	if (IS_ENABLED(CONFIG_DEFAULT_ENVIRONMENT_GENERIC_NEW_REBOOT_MODE))
 		defaultenv_append_directory(defaultenv_2_reboot_mode);
+	if (IS_ENABLED(CONFIG_DEFAULT_ENVIRONMENT_GENERIC_NEW_SECURITY_POLICY))
+		defaultenv_append_directory(defaultenv_2_security_policy);
 	if (IS_ENABLED(CONFIG_DEFAULT_ENVIRONMENT_GENERIC_NEW_IKCONFIG))
 		defaultenv_append_directory(defaultenv_2_ikconfig);
 	if (IS_ENABLED(CONFIG_DEFAULT_ENVIRONMENT_GENERIC))
@@ -93,6 +97,19 @@ void defaultenv_append(void *buf, unsigned int size, const char *name)
 	list_add_tail(&df->list, &defaultenv_list);
 }
 
+void defaultenv_append_runtime_directory(const char *srcdir)
+{
+	struct defaultenv *df;
+
+	defaultenv_add_base();
+
+	df = xzalloc(sizeof(*df));
+	df->srcdir = srcdir;
+	df->name = srcdir;
+
+	list_add_tail(&df->list, &defaultenv_list);
+}
+
 static int defaultenv_load_one(struct defaultenv *df, const char *dir,
 		unsigned flags)
 {
@@ -103,6 +120,13 @@ static int defaultenv_load_one(struct defaultenv *df, const char *dir,
 	int ret;
 
 	pr_debug("loading %s\n", df->name);
+
+	if (df->srcdir) {
+		int cpflags = 0;
+		if (flags & ENV_FLAG_NO_OVERWRITE)
+			cpflags |= COPY_FILE_NO_OVERWRITE;
+		return copy_recursive(df->srcdir, dir, cpflags);
+	}
 
 	if (!IS_ENABLED(CONFIG_DEFAULT_COMPRESSION_NONE) &&
 			ft != filetype_barebox_env) {
@@ -116,7 +140,7 @@ static int defaultenv_load_one(struct defaultenv *df, const char *dir,
 				freep, NULL, uncompress_err_stdout);
 		if (ret) {
 			free(freep);
-			pr_err("Failed to uncompress: %s\n", strerror(-ret));
+			pr_err("Failed to uncompress: %pe\n", ERR_PTR(ret));
 			return ret;
 		}
 
@@ -131,7 +155,7 @@ static int defaultenv_load_one(struct defaultenv *df, const char *dir,
 	free(freep);
 
 	if (ret)
-		pr_err("Failed to load defaultenv: %s\n", strerror(-ret));
+		pr_err("Failed to load defaultenv: %pe\n", ERR_PTR(ret));
 
 	return ret;
 }

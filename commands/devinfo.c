@@ -84,11 +84,11 @@ static int do_devinfo(int argc, char *argv[])
 
 		devinfo(dev);
 
-		if (dev->parent && (!dev->bus || dev->bus->dev != dev->parent))
+		if (dev->parent && (!dev->bus || &dev->bus->dev != dev->parent))
 			printf("Parent: %s\n", dev_name(dev->parent));
 
 		first = true;
-		list_for_each_entry(param, &dev->parameters, list) {
+		dev_for_each_param(dev, param) {
 			if (first) {
 				printf("Parameters:\n");
 				first = false;
@@ -108,7 +108,11 @@ static int do_devinfo(int argc, char *argv[])
 			       dev_is_dma_coherent(dev) ? "true" : "false",
 			       dev->dma_coherent == DEV_DMA_COHERENCE_DEFAULT ? " (default)" : "");
 
-			printf("Device node: %pOF", dev->of_node);
+			if (dev->of_node->parent)
+				printf("Device node: %pOF", dev->of_node);
+			else
+				printf("Device node: %s", "/");
+
 			if (!main_dev) {
 			       printf(" (unpopulated)\n");
 			} else if (main_dev != dev) {
@@ -117,6 +121,10 @@ static int do_devinfo(int argc, char *argv[])
 				printf("\n");
 				of_print_nodes(dev->of_node, 0, ~0);
 			}
+
+			if (dev == of_platform_root_device)
+				printf("Deep probe: %s\n",
+				       deep_probe_is_supported() ? "true" : "false");
 		}
 #endif
 	}

@@ -4,7 +4,14 @@
 
 #include <types.h>
 #include <linux/time.h>
+#include <linux/minmax.h>
 #include <linux/bitops.h>
+
+#define SECOND (1000ULL * 1000 * 1000)
+#define MSECOND (1000ULL * 1000)
+#define USECOND (1000ULL)
+
+#define HZ	SECOND
 
 #define CLOCKSOURCE_MASK(bits) GENMASK_ULL((bits) - 1, 0)
 
@@ -36,6 +43,14 @@ uint32_t clocksource_hz2mult(uint32_t hz, uint32_t shift_constant);
 int is_timeout(uint64_t start_ns, uint64_t time_offset_ns);
 int is_timeout_non_interruptible(uint64_t start_ns, uint64_t time_offset_ns);
 
+#define SCHED_TIMEOUT_MIN	(100 * USECOND)
+
+static inline int is_timeout_interruptible(uint64_t start_ns,
+					   uint64_t time_offset_ns)
+{
+	return is_timeout(start_ns, max(SCHED_TIMEOUT_MIN, time_offset_ns));
+}
+
 void arm_architected_timer_udelay(unsigned long us);
 
 void ndelay(unsigned long nsecs);
@@ -43,11 +58,13 @@ void udelay(unsigned long usecs);
 void mdelay(unsigned long msecs);
 void mdelay_non_interruptible(unsigned long msecs);
 
-#define SECOND ((uint64_t)(1000 * 1000 * 1000))
-#define MSECOND ((uint64_t)(1000 * 1000))
-#define USECOND ((uint64_t)(1000))
-
-#define HZ	SECOND
+#if IN_PROPER
+void clocksource_srand(void);
+#else
+static inline void clocksource_srand(void)
+{
+}
+#endif
 
 extern uint64_t time_beginning;
 

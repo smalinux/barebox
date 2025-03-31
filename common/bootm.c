@@ -2,9 +2,11 @@
 
 #include <common.h>
 #include <bootm.h>
+#include <bootm-overrides.h>
 #include <fs.h>
 #include <malloc.h>
 #include <memory.h>
+#include <block.h>
 #include <libfile.h>
 #include <image-fit.h>
 #include <globalvar.h>
@@ -14,8 +16,10 @@
 #include <magicvar.h>
 #include <uncompress.h>
 #include <zero_page.h>
+#include <security/config.h>
 
 static LIST_HEAD(handler_list);
+static struct sconfig_notifier_block sconfig_notifier;
 
 static __maybe_unused struct bootm_overrides bootm_overrides;
 
@@ -59,8 +63,10 @@ void bootm_data_init_defaults(struct bootm_data *data)
 	data->tee_file = getenv_nonempty("global.bootm.tee");
 	data->os_file = getenv_nonempty("global.bootm.image");
 	getenv_ul("global.bootm.image.loadaddr", &data->os_address);
-	getenv_ul("global.bootm.initrd.loadaddr", &data->initrd_address);
-	data->initrd_file = getenv_nonempty("global.bootm.initrd");
+	if (IS_ENABLED(CONFIG_BOOTM_INITRD)) {
+		getenv_ul("global.bootm.initrd.loadaddr", &data->initrd_address);
+		data->initrd_file = getenv_nonempty("global.bootm.initrd");
+	}
 	data->root_dev = getenv_nonempty("global.bootm.root_dev");
 	data->verify = bootm_get_verify_mode();
 	data->appendroot = bootm_appendroot;
@@ -76,8 +82,10 @@ void bootm_data_restore_defaults(const struct bootm_data *data)
 	globalvar_set("bootm.tee", data->tee_file);
 	globalvar_set("bootm.image", data->os_file);
 	pr_setenv("global.bootm.image.loadaddr", "0x%lx", data->os_address);
-	pr_setenv("global.bootm.initrd.loadaddr", "0x%lx", data->initrd_address);
-	globalvar_set("bootm.initrd", data->initrd_file);
+	if (IS_ENABLED(CONFIG_BOOTM_INITRD)) {
+		pr_setenv("global.bootm.initrd.loadaddr", "0x%lx", data->initrd_address);
+		globalvar_set("bootm.initrd", data->initrd_file);
+	}
 	globalvar_set("bootm.root_dev", data->root_dev);
 	bootm_set_verify_mode(data->verify);
 	bootm_appendroot = data->appendroot;
@@ -108,14 +116,31 @@ static const char * const bootm_verify_names[] = {
 	[BOOTM_VERIFY_SIGNATURE] = "signature",
 };
 
+/*
+ * There's three ways to influence whether signed images are forced:
+ * 1) CONFIG_BOOTM_FORCE_SIGNED_IMAGES: forced at compile time
+ * 2) SCONFIG_BOOT_UNSIGNED_IMAGES: determined by the active security policy
+ * 3) bootm_force_signed_images(): forced dynamically by board code.
+ *                                 will be deprecated in favor of 2)
+ */
 static bool force_signed_images = IS_ENABLED(CONFIG_BOOTM_FORCE_SIGNED_IMAGES);
 
-void bootm_force_signed_images(void)
+static void bootm_optional_signed_images(void)
+{
+	/* This function should not be exported */
+	BUG_ON(force_signed_images);
+
+	globalvar_remove("bootm.verify");
+	/* recreate bootm.verify with a single enumeration as option */
+	globalvar_add_simple_enum("bootm.verify", (unsigned int *)&bootm_verify_mode,
+				  bootm_verify_names, ARRAY_SIZE(bootm_verify_names));
+
+	bootm_verify_mode = BOOTM_VERIFY_AVAILABLE;
+}
+
+static void bootm_require_signed_images(void)
 {
 	static unsigned int verify_mode = 0;
-
-	if (force_signed_images)
-		return;
 
 	/* recreate bootm.verify with a single enumeration as option */
 	globalvar_remove("bootm.verify");
@@ -123,12 +148,27 @@ void bootm_force_signed_images(void)
 				  &bootm_verify_names[BOOTM_VERIFY_SIGNATURE], 1);
 
 	bootm_verify_mode = BOOTM_VERIFY_SIGNATURE;
+}
+
+static void bootm_unsigned_sconfig_update(struct sconfig_notifier_block *nb,
+					  enum security_config_option opt,
+					  bool allowed)
+{
+	if (!allowed)
+		bootm_require_signed_images();
+	else
+		bootm_optional_signed_images();
+}
+
+void bootm_force_signed_images(void)
+{
+	bootm_require_signed_images();
 	force_signed_images = true;
 }
 
 bool bootm_signed_images_are_forced(void)
 {
-	return force_signed_images;
+	return force_signed_images || !IS_ALLOWED(SCONFIG_BOOT_UNSIGNED_IMAGES);
 }
 
 static int uimage_part_num(const char *partname)
@@ -174,12 +214,6 @@ static bool bootm_get_override(char **oldpath, const char *newpath)
  */
 int bootm_load_os(struct image_data *data, unsigned long load_address)
 {
-	if (bootm_get_override(&data->os_file, bootm_overrides.os_file)) {
-		if (load_address == UIMAGE_INVALID_ADDRESS)
-			return -EINVAL;
-		goto os_file;
-	}
-
 	if (data->os_res)
 		return 0;
 
@@ -191,7 +225,8 @@ int bootm_load_os(struct image_data *data, unsigned long load_address)
 		unsigned long kernel_size = data->fit_kernel_size;
 
 		data->os_res = request_sdram_region("kernel",
-				load_address, kernel_size);
+				load_address, kernel_size,
+				MEMTYPE_LOADER_CODE, MEMATTRS_RWX);
 		if (!data->os_res) {
 			pr_err("unable to request SDRAM region for kernel at"
 					" 0x%08llx-0x%08llx\n",
@@ -216,10 +251,6 @@ int bootm_load_os(struct image_data *data, unsigned long load_address)
 		return 0;
 	}
 
-	if (IS_ENABLED(CONFIG_ELF) && data->elf)
-		return elf_load(data->elf);
-
-os_file:
 	if (!data->os_file)
 		return -EINVAL;
 
@@ -253,8 +284,8 @@ static int bootm_open_initrd_uimage(struct image_data *data)
 		if (bootm_get_verify_mode() > BOOTM_VERIFY_NONE) {
 			ret = uimage_verify(data->initrd);
 			if (ret) {
-				pr_err("Checking data crc failed with %s\n",
-					strerror(-ret));
+				pr_err("Checking data crc failed with %pe\n",
+					ERR_PTR(ret));
 				return ret;
 			}
 		}
@@ -301,13 +332,13 @@ bootm_load_initrd(struct image_data *data, unsigned long load_address)
 		ret = fit_open_image(data->os_fit, data->fit_config, "ramdisk",
 				     &initrd, &initrd_size);
 		if (ret) {
-			pr_err("Cannot open ramdisk image in FIT image: %s\n",
-					strerror(-ret));
+			pr_err("Cannot open ramdisk image in FIT image: %pe\n",
+					ERR_PTR(ret));
 			return ERR_PTR(ret);
 		}
 		data->initrd_res = request_sdram_region("initrd",
-				load_address,
-				initrd_size);
+				load_address, initrd_size,
+				MEMTYPE_LOADER_DATA, MEMATTRS_RW);
 		if (!data->initrd_res) {
 			pr_err("unable to request SDRAM region for initrd at"
 					" 0x%08llx-0x%08llx\n",
@@ -326,7 +357,7 @@ initrd_file:
 
 	ret = file_name_detect_type(data->initrd_file, &type);
 	if (ret) {
-		pr_err("could not open initrd \"%s\": %s\n", data->initrd_file, strerror(-ret));
+		pr_err("could not open initrd \"%s\": %pe\n", data->initrd_file, ERR_PTR(ret));
 		return ERR_PTR(ret);
 	}
 
@@ -334,8 +365,7 @@ initrd_file:
 		int num;
 		ret = bootm_open_initrd_uimage(data);
 		if (ret) {
-			pr_err("loading initrd failed with %s\n",
-			       strerror(-ret));
+			pr_err("loading initrd failed with %pe\n", ERR_PTR(ret));
 			return ERR_PTR(ret);
 		}
 
@@ -427,7 +457,8 @@ static bool fitconfig_has_fdt(struct image_data *data)
  * devicetree. It returns a pointer to the allocated devicetree which must be
  * freed after use.
  *
- * Return: pointer to the fixed devicetree or a ERR_PTR() on failure.
+ * Return: pointer to the fixed devicetree, NULL if image_data has an empty DT
+ *         or a ERR_PTR() on failure.
  */
 void *bootm_get_devicetree(struct image_data *data)
 {
@@ -458,8 +489,8 @@ void *bootm_get_devicetree(struct image_data *data)
 
 		ret = file_name_detect_type(data->oftree_file, &type);
 		if (ret) {
-			pr_err("could not open device tree \"%s\": %s\n", data->oftree_file,
-			       strerror(-ret));
+			pr_err("could not open device tree \"%s\": %pe\n", data->oftree_file,
+			       ERR_PTR(ret));
 			return ERR_PTR(ret);
 		}
 
@@ -472,6 +503,8 @@ void *bootm_get_devicetree(struct image_data *data)
 			ret = read_file_2(data->oftree_file, &size, (void *)&oftree,
 					  FILESIZE_MAX);
 			break;
+		case filetype_empty:
+			return NULL;
 		default:
 			return ERR_PTR(-EINVAL);
 		}
@@ -490,14 +523,11 @@ void *bootm_get_devicetree(struct image_data *data)
 		}
 
 	} else {
-		struct device_node *root = of_get_root_node();
-
-		if (!root)
+		data->of_root_node = of_dup_root_node_for_boot();
+		if (!data->of_root_node)
 			return NULL;
 
-		data->of_root_node = of_dup(root);
-
-		if (bootm_verbose(data) > 1 && data->of_root_node)
+		if (bootm_verbose(data) > 1)
 			printf("using internal devicetree\n");
 	}
 
@@ -542,7 +572,7 @@ int bootm_load_devicetree(struct image_data *data, void *fdt,
 	fdt_size = be32_to_cpu(((struct fdt_header *)fdt)->totalsize);
 
 	data->oftree_res = request_sdram_region("oftree", load_address,
-			fdt_size);
+			fdt_size, MEMTYPE_LOADER_DATA, MEMATTRS_RW);
 	if (!data->oftree_res) {
 		pr_err("unable to request SDRAM region for device tree at"
 				" 0x%08llx-0x%08llx\n",
@@ -568,19 +598,13 @@ int bootm_get_os_size(struct image_data *data)
 	struct stat s;
 	int ret;
 
-	if (bootm_get_override(NULL, bootm_overrides.os_file)) {
-		os_file = bootm_overrides.os_file;
-	} else {
-		if (data->elf)
-			return elf_get_mem_size(data->elf);
-		if (image_is_uimage(data))
-			return uimage_get_size(data->os, uimage_part_num(data->os_part));
-		if (data->os_fit)
-			return data->fit_kernel_size;
-		if (!data->os_file)
-			return -EINVAL;
-		os_file = data->os_file;
-	}
+	if (image_is_uimage(data))
+		return uimage_get_size(data->os, uimage_part_num(data->os_part));
+	if (data->os_fit)
+		return data->fit_kernel_size;
+	if (!data->os_file)
+		return -EINVAL;
+	os_file = data->os_file;
 
 	ret = stat(os_file, &s);
 	if (ret)
@@ -603,8 +627,8 @@ static int bootm_open_os_uimage(struct image_data *data)
 	if (bootm_get_verify_mode() > BOOTM_VERIFY_NONE) {
 		ret = uimage_verify(data->os);
 		if (ret) {
-			pr_err("Checking data crc failed with %s\n",
-					strerror(-ret));
+			pr_err("Checking data crc failed with %pe\n",
+					ERR_PTR(ret));
 			return ret;
 		}
 	}
@@ -623,6 +647,16 @@ static int bootm_open_os_uimage(struct image_data *data)
 	return 0;
 }
 
+static bool bootm_fit_config_valid(struct fit_handle *fit,
+				   struct device_node *config)
+{
+	/*
+	 * Consider only FIT configurations which do provide a loadable kernel
+	 * image.
+	 */
+	return !!fit_has_image(fit, config, "kernel");
+}
+
 static int bootm_open_fit(struct image_data *data)
 {
 	struct fit_handle *fit;
@@ -632,7 +666,7 @@ static int bootm_open_fit(struct image_data *data)
 	int ret;
 
 	if (!IS_ENABLED(CONFIG_FITIMAGE))
-		return 0;
+		return -ENOSYS;
 
 	header = (struct fdt_header *)data->os_header;
 	flen = bootm_get_os_size(data);
@@ -648,7 +682,8 @@ static int bootm_open_fit(struct image_data *data)
 	data->os_fit = fit;
 
 	data->fit_config = fit_open_configuration(data->os_fit,
-						  data->os_part);
+						  data->os_part,
+						  bootm_fit_config_valid);
 	if (IS_ERR(data->fit_config)) {
 		pr_err("Cannot open FIT image configuration '%s'\n",
 		       data->os_part ? data->os_part : "default");
@@ -682,25 +717,6 @@ static int bootm_open_fit(struct image_data *data)
 		}
 		/* Note: Error case uses default value. */
 	}
-
-	return 0;
-}
-
-static int bootm_open_elf(struct image_data *data)
-{
-	struct elf_image *elf;
-
-	if (!IS_ENABLED(CONFIG_ELF))
-		return -ENOSYS;
-
-	elf = elf_open(data->os_file);
-	if (IS_ERR(elf))
-		return PTR_ERR(elf);
-
-	pr_info("Entry Point:  %08llx\n", elf->entry);
-
-	data->os_address = elf->entry;
-	data->elf = elf;
 
 	return 0;
 }
@@ -748,6 +764,7 @@ int bootm_boot(struct bootm_data *bootm_data)
 	int ret;
 	enum filetype os_type;
 	size_t size;
+	const char *os_type_str;
 
 	if (!bootm_data->os_file) {
 		pr_err("no image given\n");
@@ -771,8 +788,7 @@ int bootm_boot(struct bootm_data *bootm_data)
 
 	ret = read_file_2(data->os_file, &size, &data->os_header, PAGE_SIZE);
 	if (ret < 0 && ret != -EFBIG) {
-		pr_err("could not open %s: %s\n", data->os_file,
-				strerror(-ret));
+		pr_err("could not open %s: %pe\n", data->os_file, ERR_PTR(ret));
 		goto err_out;
 	}
 	if (size < PAGE_SIZE)
@@ -803,15 +819,16 @@ int bootm_boot(struct bootm_data *bootm_data)
 		}
 	}
 
+	os_type_str = file_type_to_short_string(os_type);
+
 	switch (os_type) {
 	case filetype_oftree:
 		ret = bootm_open_fit(data);
+		os_type = file_detect_type(data->fit_kernel, data->fit_kernel_size);
+		os_type_str = "FIT";
 		break;
 	case filetype_uimage:
 		ret = bootm_open_os_uimage(data);
-		break;
-	case filetype_elf:
-		ret = bootm_open_elf(data);
 		break;
 	default:
 		ret = 0;
@@ -819,13 +836,6 @@ int bootm_boot(struct bootm_data *bootm_data)
 	}
 
 	if (ret) {
-		const char *os_type_str;
-
-		if (os_type == filetype_oftree)
-			os_type_str = "FIT";
-		else
-			os_type_str = file_type_to_short_string(os_type);
-
 		pr_err("Loading %s image failed with: %pe\n", os_type_str, ERR_PTR(ret));
 		goto err_out;
 	}
@@ -902,6 +912,7 @@ int bootm_boot(struct bootm_data *bootm_data)
 
 	if (bootm_data->provide_hostname) {
 		const char *hostname = getenv_nonempty("global.hostname");
+		const char *suffix = NULL;
 		char *hostname_bootarg;
 
 		if (!hostname) {
@@ -916,7 +927,13 @@ int bootm_boot(struct bootm_data *bootm_data)
 			goto err_out;
 		}
 
-		hostname_bootarg = basprintf("systemd.hostname=%s", hostname);
+		if (IS_ENABLED(CONFIG_SERIAL_NUMBER_FIXUP_SYSTEMD_HOSTNAME))
+			suffix = barebox_get_serial_number();
+
+		hostname_bootarg = basprintf("systemd.hostname=%s%s%s",
+					     hostname, suffix ? "-" : "",
+					     suffix ?: "");
+
 		globalvar_add_simple("linux.bootargs.hostname", hostname_bootarg);
 		free(hostname_bootarg);
 	}
@@ -948,13 +965,6 @@ int bootm_boot(struct bootm_data *bootm_data)
 		printf("Passing control to %s handler\n", handler->name);
 	}
 
-	if (bootm_get_override(&data->os_file, bootm_overrides.os_file)) {
-		if (data->os_res) {
-			release_sdram_region(data->os_res);
-			data->os_res = NULL;
-		}
-	}
-
 	bootm_get_override(&data->oftree_file, bootm_overrides.oftree_file);
 
 	if (bootm_get_override(&data->initrd_file, bootm_overrides.initrd_file)) {
@@ -982,8 +992,6 @@ err_out:
 			uimage_close(data->initrd);
 		uimage_close(data->os);
 	}
-	if (IS_ENABLED(CONFIG_ELF) && data->elf)
-		elf_close(data->elf);
 	if (IS_ENABLED(CONFIG_FITIMAGE) && data->os_fit)
 		fit_close(data->os_fit);
 	if (data->of_root_node)
@@ -1002,9 +1010,12 @@ err_out:
 }
 
 #ifdef CONFIG_BOOT_OVERRIDE
-void bootm_set_overrides(const struct bootm_overrides *overrides)
+struct bootm_overrides bootm_set_overrides(const struct bootm_overrides overrides)
 {
-	bootm_overrides = *overrides;
+	struct bootm_overrides old = bootm_overrides;
+	/* bootm_merge_overrides copies only actual (non-NULL) overrides */
+	bootm_merge_overrides(&bootm_overrides, &overrides);
+	return old;
 }
 #endif
 
@@ -1094,6 +1105,8 @@ static struct image_handler zstd_bootm_handler = {
 	.filetype = filetype_zstd_compressed,
 };
 
+int linux_rootwait_secs = 10;
+
 static int bootm_init(void)
 {
 	globalvar_add_simple("bootm.image", NULL);
@@ -1110,15 +1123,22 @@ static int bootm_init(void)
 		globalvar_add_simple("bootm.initrd.loadaddr", NULL);
 	}
 
-	if (bootm_signed_images_are_forced())
-		bootm_verify_mode = BOOTM_VERIFY_SIGNATURE;
-
 	globalvar_add_simple_bool("bootm.dryrun", &bootm_dryrun);
 	globalvar_add_simple_int("bootm.verbose", &bootm_verbosity, "%u");
 
-	globalvar_add_simple_enum("bootm.verify", (unsigned int *)&bootm_verify_mode,
-				  bootm_verify_names, ARRAY_SIZE(bootm_verify_names));
+	if (bootm_signed_images_are_forced())
+		bootm_require_signed_images();
+	else
+		bootm_optional_signed_images();
 
+	sconfig_register_handler_filtered(&sconfig_notifier,
+					  bootm_unsigned_sconfig_update,
+					  SCONFIG_BOOT_UNSIGNED_IMAGES);
+
+
+	if (IS_ENABLED(CONFIG_ROOTWAIT_BOOTARG))
+		globalvar_add_simple_int("linux.rootwait",
+					 &linux_rootwait_secs, "%d");
 
 	if (IS_ENABLED(CONFIG_BZLIB))
 		register_image_handler(&bzip2_bootm_handler);

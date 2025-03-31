@@ -46,7 +46,7 @@ static void noinline gpio_fec_active(void)
 	/* power down phy, put into reset */
 	ret = gpio_request_array(fec_gpios, ARRAY_SIZE(fec_gpios));
 	if (ret) {
-		pr_err("Failed to request fec gpios: %s\n", strerror(-ret));
+		pr_err("Failed to request fec gpios: %pe\n", ERR_PTR(ret));
 		return;
 	}
 
@@ -110,7 +110,7 @@ static iomux_v3_cfg_t tx25_lcdc_gpios[] = {
 
 static struct fb_videomode stk5_fb_mode = {
 	.name = "G-ETV570G0DMU",
-	.pixclock	= 33333,
+	.pixclock.ps	= 33333,
 
 	.xres		= 640,
 	.yres		= 480,

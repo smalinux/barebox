@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include <common.h>
+#include <linux/compiler.h>
 #include <efi.h>
 #include <efi/efi-util.h>
 #include <malloc.h>
@@ -15,10 +16,7 @@ struct string {
 	unsigned used;
 };
 
-char *cprintf(struct string *str, const char *fmt, ...)
-    __attribute__ ((format(__printf__, 2, 3)));
-
-char *cprintf(struct string *str, const char *fmt, ...)
+static __printf(2, 3) char *cprintf(struct string *str, const char *fmt, ...)
 {
 	void *buf = str->str;
 	unsigned bufsize = 0;
@@ -804,7 +802,8 @@ char *device_path_to_partuuid(const struct efi_device_path *dev_path)
 		struct efi_device_path_hard_drive_path *hd =
 			(struct efi_device_path_hard_drive_path *)dev_path;
 
-		if (hd->signature_type != SIGNATURE_TYPE_GUID)
+		if (hd->signature_type != SIGNATURE_TYPE_GUID &&
+		    hd->signature_type != SIGNATURE_TYPE_MBR)
 			continue;
 
 		return xasprintf("%pUl", (efi_guid_t *)&(hd->signature[0]));

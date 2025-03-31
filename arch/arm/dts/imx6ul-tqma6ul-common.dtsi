@@ -7,6 +7,8 @@
 #include "imx6ul.dtsi"
 
 / {
+	barebox,deep-probe;
+
 	chosen {
 		environment-sd {
 			compatible = "barebox,environment";
@@ -56,7 +58,3 @@
 	barebox,provide-mac-address = <&fec1 0x620 &fec2 0x632>;
 };
 
-/* include the FIT public key for verifying on demand */
-#ifdef CONFIG_BOOTM_FITIMAGE_PUBKEY
-#include CONFIG_BOOTM_FITIMAGE_PUBKEY
-#endif

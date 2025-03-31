@@ -23,10 +23,6 @@ config NET_ETHADDR_FROM_MACHINE_ID
 	  This is not recommended for use in production as it may leak
 	  information about the machine ID.
 
-config NET_NFS
-	bool
-	prompt "nfs support"
-
 config NET_NETCONSOLE
 	bool
 	depends on !CONSOLE_NONE
@@ -62,5 +58,7 @@ config NET_FASTBOOT
 	help
 	  This option adds support for the UDP variant of the Fastboot
 	  protocol.
+
+source "net/9p/Kconfig"
 
 endif

@@ -22,6 +22,8 @@
 #define INTPTR_MAX	LONG_MAX
 #define UINTPTR_MAX	ULONG_MAX
 
+#define RESOURCE_SIZE_MAX	((resource_size_t)~0)
+
 #define U8_MAX		((u8)~0U)
 #define S8_MAX		((s8)(U8_MAX >> 1))
 #define S8_MIN		((s8)(-S8_MAX - 1))
@@ -36,5 +38,6 @@
 #define S64_MIN		((s64)(-S64_MAX - 1))
 
 #define PATH_MAX       1024
+#define NAME_MAX       255	/* # chars in a file name */
 
 #endif /* _LINUX_LIMITS_H */

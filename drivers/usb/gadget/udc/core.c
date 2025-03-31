@@ -46,6 +46,7 @@ struct usb_udc {
 };
 
 static LIST_HEAD(udc_list);
+static DEFINE_DEV_CLASS(udc_class, "udc");
 
 /* Protects udc_list, udc->driver, driver->is_bound, and related calls */
 static DEFINE_MUTEX(udc_lock);
@@ -1194,6 +1195,8 @@ int usb_add_gadget(struct usb_gadget *gadget)
 	if (ret)
 		goto err_free_id;
 
+	class_add_device(&udc_class, &udc->dev);
+
 	dev_add_param_uint32(&gadget->dev, "product", NULL, NULL,
 			     &gadget->product_id, "0x%04x", NULL);
 	dev_add_param_uint32(&gadget->dev, "vendor", NULL, NULL,
@@ -1344,24 +1347,24 @@ EXPORT_SYMBOL_GPL(usb_del_gadget_udc);
 
 /* ------------------------------------------------------------------------- */
 
-static int gadget_match_driver(struct device *dev, struct driver *drv)
+static int gadget_match_driver(struct device *dev, const struct driver *drv)
 {
 	struct usb_gadget *gadget = dev_to_usb_gadget(dev);
 	struct usb_udc *udc = gadget->udc;
-	struct usb_gadget_driver *driver = container_of(drv,
+	const struct usb_gadget_driver *driver = container_of_const(drv,
 			struct usb_gadget_driver, driver);
 
 	/* If the driver specifies a udc_name, it must match the UDC's name */
 	if (driver->udc_name &&
 			strcmp(driver->udc_name, dev_name(&udc->dev)) != 0)
-		return -1;
+		return false;
 
 	/* If the driver is already bound to a gadget, it doesn't match */
 	if (driver->is_bound)
-		return -1;
+		return false;
 
 	/* Otherwise any gadget driver matches any UDC */
-	return 0;
+	return true;
 }
 
 static void udc_poll_driver(struct poller_struct *poller)

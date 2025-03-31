@@ -4,11 +4,9 @@
 #include "stm32mp151c-plyaqm.dtsi"
 #include "stm32mp151.dtsi"
 
-#ifdef CONFIG_BOOTM_FITIMAGE_PUBKEY
-#include CONFIG_BOOTM_FITIMAGE_PUBKEY
-#endif
-
 / {
+	barebox,deep-probe;
+
 	aliases {
 		state = &state_emmc;
 	};

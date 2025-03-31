@@ -5,9 +5,9 @@ Getting barebox
 ---------------
 
 barebox is released on a monthly basis. The version numbers use the format
-YYYY.MM.N, so 2014.06.0 is the monthly release for June 2014. Stable releases
+``YYYY.MM.N``, so ``2025.05.0`` is the monthly release for May 2025. Stable releases
 are done as needed to fix critical problems and are indicated by incrementing
-the suffix (for example 2014.06.1).
+the suffix (for example ``2025.05.1``).
 
 All releases can be downloaded from:
 
@@ -16,17 +16,17 @@ https://www.barebox.org/download/
 Development versions of barebox are accessible via Git. A local repository clone
 can be checked out as follows:
 
-.. code-block:: sh
+.. code-block:: console
 
-  $ git clone git://git.pengutronix.de/git/barebox.git
+  $ git clone https://git.pengutronix.de/git/barebox
   Cloning into 'barebox'...
-  remote: Counting objects: 113356, done.
-  remote: Compressing objects: 100% (25177/25177), done.
-  remote: Total 113356 (delta 87910), reused 111155 (delta 85935)
-  Receiving objects: 100% (113356/113356), 33.13 MiB | 183.00 KiB/s, done.
-  Resolving deltas: 100% (87910/87910), done.
-  Checking connectivity... done.
-  Checking out files: 100% (5651/5651), done.
+  remote: Enumerating objects: 330649, done.
+  remote: Counting objects: 100% (3932/3932), done.
+  remote: Compressing objects: 100% (2203/2203), done.
+  remote: Total 330649 (delta 2421), reused 2217 (delta 1706), pack-reused 326717
+  Receiving objects: 100% (330649/330649), 82.03 MiB | 14.88 MiB/s, done.
+  Resolving deltas: 100% (265076/265076), done.
+  Updating files: 100% (19054/19054), done.
 
 By default, the master branch is checked out. If you want to develop for
 barebox, this is the right branch to send patches against.
@@ -34,9 +34,9 @@ barebox, this is the right branch to send patches against.
 If you want to see which patches are already selected for the next release,
 you can look at the ``next`` branch:
 
-.. code-block:: sh
+.. code-block:: console
 
-  $ git checkout -b next origin/remotes/next
+  $ git checkout -b next remotes/origin/next
 
 A web interface to the repository is available at
 https://git.pengutronix.de/cgit/barebox
@@ -66,17 +66,17 @@ in your $PATH, just the prefix.
 
 Either export ``ARCH`` and ``CROSS_COMPILE`` once before working on barebox:
 
-.. code-block:: sh
+.. code-block:: console
 
-  export ARCH=arm
-  export CROSS_COMPILE=/path/to/arm-cortexa8-linux-gnueabihf-
-  make ...
+  $ export ARCH=arm
+  $ export CROSS_COMPILE=/path/to/arm-cortexa8-linux-gnueabihf-
+  $ make ...
 
 or add them to each invocation of the ``make`` command:
 
-.. code-block:: sh
+.. code-block:: console
 
-  ARCH=arm CROSS_COMPILE=/path/to/arm-cortexa8-linux-gnueabihf- make ...
+  $ ARCH=arm CROSS_COMPILE=/path/to/arm-cortexa8-linux-gnueabihf- make ...
 
 For readability, ARCH/CROSS_COMPILE are skipped from the following examples.
 
@@ -87,23 +87,23 @@ All configuration files can be found under the ``arch/${ARCH}/configs/``
 directory. For an overview of possible Make targets for your architecture,
 type:
 
-.. code-block:: sh
+.. code-block:: console
 
-  make help
+  $ make help
 
 Your output from ``make help`` will be based on the architecture you've
 selected via the ``ARCH`` variable. So if, for example, you had selected:
 
-.. code-block:: sh
+.. code-block:: console
 
-  export ARCH=mips
+  $ export ARCH=mips
 
 your help output would represent all of the generic (architecture-independent)
 targets, followed by the MIPS-specific ones:
 
-.. code-block:: sh
+.. code-block:: console
 
-  make [ARCH=mips] help
+  $ make [ARCH=mips] help
   ...
   ... list of generic targets ...
   ...
@@ -122,16 +122,16 @@ can't find your board in the list, it may be supported by one of the multi-board
 configs. As an example, this is the case for tegra_v7_defconfig and imx_v7_defconfig.
 Select your config with ``make <yourboard>_defconfig``:
 
-.. code-block:: sh
+.. code-block:: console
 
-  make imx_v7_defconfig
+  $ make imx_v7_defconfig
 
 The configuration can be further customized with one of the configuration frontends
 with the most popular being ``menuconfig``:
 
-.. code-block:: sh
+.. code-block:: console
 
-  make menuconfig
+  $ make menuconfig
 
 barebox uses the same configuration and build system as Linux (Kconfig,
 Kbuild), so you can use all the kernel config targets you already know, e.g.
@@ -149,9 +149,9 @@ Once you check out your barebox source directory, and before you do any
 configuration or building, set the environment variable ``KBUILD_OUTPUT``
 to point to your intended output directory, as in:
 
-.. code-block:: sh
+.. code-block:: console
 
-  export KBUILD_OUTPUT=.../my_barebox_build_directory
+  $ export KBUILD_OUTPUT=.../my_barebox_build_directory
 
 From that point on, all of the ``make`` commands you run in your source
 directory will generate their output in your specified output directory.
@@ -174,9 +174,9 @@ Compilation
 After barebox has been :ref:`configured <configuration>` it can be compiled
 simply with:
 
-.. code-block:: sh
+.. code-block:: console
 
-  make
+  $ make
 
 The resulting binary varies depending on the board barebox is compiled for.
 Without :ref:`multi_image` support the ``barebox-flash-image`` link will point
@@ -320,10 +320,12 @@ In addition to these barebox also builds host and target tools that are useful
 outside of barebox build: e.g. to manipulate the environment or to load an
 image over a boot ROM's USB recovery protocol. These tools may link against
 libraries, which are detected using ``PKG_CONFIG`` and ``CROSS_PKG_CONFIG``
-for native and cross build respectively. Their default values are::
+for native and cross build respectively. Their default values are:
 
-  PKG_CONFIG=pkg-config
-  CROSS_PKG_CONFIG=${CROSS_COMPILE}pkg-config
+.. code-block:: console
+
+  $ PKG_CONFIG=pkg-config
+  $ CROSS_PKG_CONFIG=${CROSS_COMPILE}pkg-config
 
 These can be overridden using environment or make variables.
 
@@ -340,9 +342,9 @@ about ``libusb-1.0``. This config won't build any target tools.
 
 .. code-block:: console
 
-  export ARCH=sandbox
-  make hosttools_defconfig
-  make scripts
+  $ export ARCH=sandbox
+  $ make hosttools_defconfig
+  $ make scripts
 
 Target Tools
 ^^^^^^^^^^^^
@@ -355,7 +357,7 @@ use. Example:
 
 .. code-block:: console
 
-  export ARCH=sandbox CROSS_COMPILE=aarch64-linux-gnu-
-  export CROSS_PKG_CONFIG=pkg-config
-  make targettools_defconfig
-  make scripts
+  $ export ARCH=sandbox CROSS_COMPILE=aarch64-linux-gnu-
+  $ export CROSS_PKG_CONFIG=pkg-config
+  $ make targettools_defconfig
+  $ make scripts

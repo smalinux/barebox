@@ -30,6 +30,7 @@
 #include <efi/partition.h>
 #include <bootsource.h>
 #include <magicvar.h>
+#include <security/config.h>
 #else
 #define EXPORT_SYMBOL(x)
 #endif
@@ -307,10 +308,8 @@ int envfs_save(const char *filename, const char *dirname, unsigned flags)
 	struct action_data data = {};
 	void *buf = NULL, *wbuf;
 	struct envfs_entry *env;
-	const char *defenv_path = default_environment_path_get();
+	__maybe_unused const char *defenv_path;
 
-	if (!filename)
-		filename = defenv_path;
 	if (!filename)
 		return -ENOENT;
 
@@ -419,6 +418,7 @@ int envfs_save(const char *filename, const char *dirname, unsigned flags)
 	ret = 0;
 
 #ifdef CONFIG_NVVAR
+	defenv_path = default_environment_path_get();
 	if (defenv_path && !strcmp(filename, defenv_path))
 	    nv_var_set_clean();
 #endif
@@ -449,6 +449,11 @@ int envfs_load(const char *filename, const char *dir, unsigned flags)
 	int envfd;
 	int ret = 0;
 	size_t size, rsize;
+
+#ifdef __BAREBOX__
+	if (!IS_ALLOWED(SCONFIG_ENVIRONMENT_LOAD))
+		return -EPERM;
+#endif
 
 	if (!filename)
 		filename = default_environment_path_get();

@@ -17,10 +17,6 @@
 
 #ifdef __PBL__
 #define udelay early_udelay
-#undef  dev_err
-#define dev_err(d, ...)		pr_err(__VA_ARGS__)
-#undef  dev_warn
-#define dev_warn(d, ...)	pr_warn(__VA_ARGS__)
 #endif
 
 #include "atmel-sdhci.h"
@@ -132,7 +128,7 @@ int at91_sdhci_send_command(struct at91_sdhci *host, struct mci_cmd *cmd,
 	sdhci_write32(sdhci, SDHCI_INT_STATUS, mask);
 
 	if (data)
-		sdhci_transfer_data_pio(sdhci, data);
+		sdhci_transfer_data_pio(sdhci, cmd, data);
 
 	udelay(1000);
 

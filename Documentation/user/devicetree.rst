@@ -83,13 +83,24 @@ barebox has support for device tree overlays. barebox knows two different trees,
 the live tree and the device tree the kernel is started with. Both can be applied
 overlays to.
 
+.. note:: Compiling a device tree discards label information by default. To be able
+ to use phandles into the base device tree from inside an overlay, pass to dtc the
+ ``-@`` option when compiling the base device tree.
+ This will populate ``/__symbols__`` in the base device tree.
+
+ Having ``__fixups__`` in the overlay, but no ``__symbols__`` in the base device
+ tree is not allowed: ``ERROR: of_resolver: __symbols__ missing from base devicetree``.
+
 Device tree overlays on the live tree
 .....................................
 
 While the live tree can be patched by board code, barebox does not
 detect any changes to the live tree. To let the overlays have any effect, board
-code must make sure the live tree is patched before the devices are instanciated
+code must make sure the live tree is patched before the devices are instantiated
 from it.
+
+The ``CONFIG_OF_OVERLAY_LIVE`` option will need to be enabled to generate
+``__symbols__`` into the barebox device tree.
 
 Device tree overlays on the kernel device tree
 ..............................................
@@ -97,24 +108,32 @@ Device tree overlays on the kernel device tree
 Overlays can be applied to the kernel device tree before it is handed over to
 the kernel. The behaviour is controlled by different variables:
 
-``global.of.overlay.dir``
-  Overlays are read from this directory. barebox will try to apply all overlays
-  found here if not limited by one of the other variables below. When the path
-  given here is an absolute path it is used as is. A relative path is relative
-  to ``/`` or relative to the rootfs when using bootloader spec.
+``global.of.overlay.path``
+  Overlays are read from this path. The path can either be a directory which
+  contains the overlays or a path to a FIT-image. barebox will try to apply all
+  overlays found if not limited by one of the other variables below. When the
+  path given here is an absolute path it is used as is. A relative path is
+  relative to ``/`` or relative to the rootfs when using bootloader spec.
 ``global.of.overlay.compatible``
   This is a space separated list of compatibles. Only overlays matching one of
   these compatibles will be applied. When this list is empty then all overlays
   will be applied. Overlays that don't have a compatible are considered being
   always compatible.
-``global.of.overlay.filepattern``
-  This is a space separated list of file patterns. An overlay is only applied
-  when its filename matches one of the patterns. The patterns can contain
-  ``*`` and ``?`` as wildcards. The default is ``*`` which means all files are
-  applied.
+``global.of.overlay.pattern``
+  This is a space separated list of file patterns or FIT-image config-node name
+  patterns. An overlay is only applied when its filename or FIT-image
+  config-node name matches one of the patterns. The patterns can contain ``*``
+  and ``?`` as wildcards. The default is ``*`` which means all files or FIT-Image
+  config-nodes are applied.
 ``global.of.overlay.filter``
   This is a space separated list of filters to apply. There are two generic filters:
-  ``filepattern`` matches ``global.of.overlay.filepattern`` above, ``compatible`` matches
-  ``global.of.overlay.compatible`` above. The default is ``filepattern compatible``
+  ``pattern`` matches ``global.of.overlay.pattern`` above, ``compatible`` matches
+  ``global.of.overlay.compatible`` above. The default is ``pattern compatible``
   which means the two generic filters are active. This list may be replaced or
   supplemented by board specific filters.
+
+The kernel device trees need to be built with symbols (``dtc -@`` option) enabled.
+For upstream device trees, this is currently done on a case-by-case basis in the
+Makefiles::
+
+  DTC_FLAGS_bcm2711-rpi-4-b := -@

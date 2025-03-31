@@ -21,6 +21,14 @@
 #define ZERO_OR_NULL_PTR(x) ((unsigned long)(x) <= \
 				(unsigned long)ZERO_SIZE_PTR)
 
+#ifdef CONFIG_MALLOC_TLSF
+void *malloc_add_pool(void *mem, size_t bytes);
+void malloc_register_store(void (*cb)(size_t bytes));
+bool malloc_store_is_registered(void);
+#else
+static inline bool malloc_store_is_registered(void) { return false; }
+#endif
+
 #if IN_PROPER
 void *malloc(size_t) __alloc_size(1);
 size_t malloc_usable_size(void *);
@@ -79,5 +87,11 @@ static inline bool want_init_on_free(void)
 {
 	return IS_ENABLED(CONFIG_INIT_ON_FREE_DEFAULT_ON);
 }
+
+#ifdef CONFIG_DEBUG_MEMLEAK
+void memleak_check(void);
+#else
+static inline void memleak_check(void) {}
+#endif
 
 #endif /* __MALLOC_H */

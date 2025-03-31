@@ -7,7 +7,7 @@ targets:
         cpu: cortex-a57
         memory: 1024M
         kernel: barebox-dt-2nd.img
-        extra_args: ''
+        display: qemu-default
       BareboxDriver:
         prompt: 'barebox@[^:]+:[^ ]+ '
         bootstring: 'commandline:'
@@ -15,8 +15,8 @@ targets:
     features:
       - virtio-mmio
       - network
-    runner:
-      tuxmake_arch: arm64
+      - barebox-state
+      - testfs
 images:
   barebox-dt-2nd.img: !template "$LG_BUILDDIR/images/barebox-dt-2nd.img"
 imports:

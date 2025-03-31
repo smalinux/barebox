@@ -11,7 +11,8 @@
 #include <watchdog.h>
 #include <restart.h>
 
-#define for_each_watchdog(wd) list_for_each_entry(wd, &watchdog_class.devices, dev.class_list)
+#define for_each_watchdog(wd) \
+	class_for_each_container_of_device(&watchdog_class, wd, dev)
 
 DEFINE_DEV_CLASS(watchdog_class, "watchdog");
 
@@ -176,7 +177,8 @@ static int seconds_to_expire_get(struct param_d *p, void *priv)
 	return 0;
 }
 
-static void __noreturn watchdog_restart_handle(struct restart_handler *this)
+static void __noreturn watchdog_restart_handle(struct restart_handler *this,
+					       unsigned long flags)
 {
 	struct watchdog *wd = watchdog_get_default();
 	int ret = -ENODEV;
@@ -255,7 +257,7 @@ int watchdog_deregister(struct watchdog *wd)
 		poller_async_unregister(&wd->poller);
 	}
 
-	class_remove_device(&watchdog_class, &wd->dev);
+	list_del_init(&wd->dev.class_list);
 
 	return 0;
 }

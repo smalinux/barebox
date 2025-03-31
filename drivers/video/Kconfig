@@ -32,7 +32,6 @@ config DRIVER_VIDEO_ATMEL_HLCD
 config DRIVER_VIDEO_EFI_GOP
 	bool "EFI Graphics Output Protocol (GOP)"
 	depends on EFI_PAYLOAD
-	depends on X86
 
 config DRIVER_VIDEO_IMX
 	bool "i.MX framebuffer driver"
@@ -55,7 +54,7 @@ config DRIVER_VIDEO_IMX_IPU_OVERLAY
 
 config DRIVER_VIDEO_STM
 	bool "i.MX23/28 framebuffer driver"
-	depends on ARCH_MXS
+	depends on ARCH_MXS || COMPILE_TEST
 	help
 	  Say 'Y' here to enable framebuffer and splash screen support for
 	  i.MX23 and i.MX28 based systems.
@@ -68,9 +67,18 @@ config DRIVER_VIDEO_STM32_LTDC
 	  Say 'Y' here to enable framebuffer and splash screen support for
 	  STM32 and STM32MP1.
 
+config DRIVER_VIDEO_STM32_DSI
+	bool "Enable STM32 DSI video support"
+	select VIDEO_VPL
+	select DRIVER_VIDEO_DW_MIPI_DSI
+	depends on ARCH_STM32 || COMPILE_TEST
+	help
+	  This option enables support DSI internal bridge which can be used on
+	  devices which have DSI devices connected.
+
 config DRIVER_VIDEO_SDL
 	bool "SDL framebuffer driver"
-	depends on SANDBOX
+	depends on HAVE_LIBSDL2
 	select SDL
 
 config DRIVER_VIDEO_PXA
@@ -106,7 +114,7 @@ config DRIVER_VIDEO_SIMPLEFB
 
 config DRIVER_VIDEO_RAMFB
 	bool "QEMU RamFB support"
-	select QEMU_FW_CFG
+	select FS_QEMU_FW_CFG
 	help
 	  Add support for setting up a QEMU RamFB driver.
 
@@ -118,6 +126,13 @@ config DRIVER_VIDEO_EDID
 
 config DRIVER_VIDEO_MIPI_DBI
 	bool
+
+config DRIVER_VIDEO_MIPI_DSI
+	bool
+	help
+	  Support MIPI DSI interface for driving a MIPI compatible device.
+	  The MIPI Display Serial Interface (MIPI DSI) defines a high-speed
+	  serial interface between a host processor and a display module.
 
 config DRIVER_VIDEO_BACKLIGHT
 	bool "Add backlight support"
@@ -187,6 +202,28 @@ config DRIVER_VIDEO_PANEL_SITRONIX_ST7789V
 	  Say Y here if you want to enable support for the Sitronix
 	  ST7789V controller for 240x320 LCD panels
 
+config DRIVER_VIDEO_PANEL_SITRONIX_ST7703
+	tristate "Sitronix ST7703 based MIPI touchscreen panels"
+	depends on OF
+	depends on DRIVER_VIDEO_MIPI_DSI
+	depends on DRIVER_VIDEO_BACKLIGHT
+	help
+	  Say Y here if you want to enable support for Sitronix ST7703 based
+	  panels, souch as Rocktech JH057N00900 MIPI DSI panel as e.g. used in
+	  the Librem 5 devkit. It has a resolution of 720x1440 pixels, a built
+	  in backlight and touch controller.
+	  Touch input support is provided by the goodix driver and needs to be
+	  selected separately.
+
+config DRIVER_VIDEO_PANEL_ORISETECH_OTM8009A
+	tristate "Orise Technology otm8009a 480x800 dsi 2dl panel"
+	depends on OF
+	depends on DRIVER_VIDEO_MIPI_DSI
+	depends on DRIVER_VIDEO_BACKLIGHT
+	help
+	  Say Y here if you want to enable support for Orise Technology
+	  otm8009a 480x800 dsi 2dl panel.
+
 config DRIVER_VIDEO_PANEL_MIPI_DBI
 	tristate "MIPI DBI compatible panels"
 	depends on OFTREE && SPI
@@ -205,6 +242,16 @@ config DRIVER_VIDEO_DW_HDMI
 	select OFTREE
 	help
 	  Say Y here if you want to enable support for the Designware HDMI
+	  controller. To make use of this driver you need platform specific
+	  glue code to be selected as well.
+
+config DRIVER_VIDEO_DW_MIPI_DSI
+	tristate "Designware MIPI-DSI support"
+	select DRIVER_VIDEO_MIPI_DSI
+	select VIDEO_VPL
+	select OFTREE
+	help
+	  Say Y here if you want to enable support for the Designware MIPI-DSI
 	  controller. To make use of this driver you need platform specific
 	  glue code to be selected as well.
 

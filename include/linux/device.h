@@ -39,7 +39,7 @@ static inline void __iomem *dev_platform_ioremap_resource(struct device *dev,
 	 * so we don't need to do anything besides requesting the regions
 	 * and can leave the memory attributes unchanged.
 	 */
-	return dev_request_mem_region_err_null(dev, resource);
+	return dev_request_mem_region(dev, resource);
 }
 
 static inline void __iomem *devm_ioremap(struct device *dev,
@@ -52,25 +52,35 @@ static inline void __iomem *devm_ioremap(struct device *dev,
 	return IOMEM(start);
 }
 
-static inline int bus_for_each_dev(const struct bus_type *bus, struct device *start, void *data,
-				   int (*fn)(struct device *dev, void *data))
+/**
+ * dev_set_drvdata - set driver private data for device
+ * @dev: device instance
+ * @data: driver-specific data
+ *
+ * Returns private driver data or NULL if none was set.
+ *
+ * NOTE: This does _not_ return the match data associated with
+ * the match. For that use device_get_match_data instead.
+ */
+static inline void dev_set_drvdata(struct device *dev, void *data)
 {
-	struct device *dev;
-	int ret;
+	dev->driver_data = data;
+}
 
-	bus_for_each_device(bus, dev) {
-		if (start) {
-			if (dev == start)
-				start = NULL;
-			continue;
-		}
-
-		ret = fn(dev, data);
-		if (ret)
-			return ret;
-	}
-
-	return 0;
+/**
+ * dev_get_drvdata - get driver match data associated for device
+ * @dev: device instance
+ * @data: driver-specific data
+ *
+ * Set some driver and device specific data for later retrieval
+ * by dev_get_drvdata.
+ *
+ * NOTE: This does _not_ return the match data associated with
+ * the match. For that use device_get_match_data instead.
+ */
+static inline void *dev_get_drvdata(const struct device *dev)
+{
+	return dev->driver_data;
 }
 
 #endif

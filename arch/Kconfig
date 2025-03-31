@@ -59,6 +59,9 @@ config ARCH_HAS_CTRLC
 config ARCH_DMA_DEFAULT_COHERENT
 	bool
 
+config ARCH_HAS_DMA_WRITE_COMBINE
+	bool
+
 config ARCH_HAS_ASAN_FIBER_API
 	bool
 
@@ -66,6 +69,9 @@ config ARCH_HAS_STACK_DUMP
 	bool
 
 config ARCH_HAS_DATA_ABORT_MASK
+	bool
+
+config ARCH_HAS_DATA_ABORT_MASK_PBL
 	bool
 
 config ARCH_HAS_ZERO_PAGE
@@ -76,6 +82,12 @@ config HAVE_EFFICIENT_UNALIGNED_ACCESS
 
 config HAVE_ARCH_BOARD_GENERIC_DT
 	bool
+
+config HAVE_ARCH_BOOTM_OFTREE
+	bool
+	help
+	  Selected by architectures where barebox can pass a device tree to the
+	  kernel while booting with bootm.
 
 config HAVE_MOD_ARCH_SPECIFIC
 	bool
@@ -110,3 +122,9 @@ config HAVE_ARCH_KASAN
 
 config ARCH_HAS_UBSAN_SANITIZE_ALL
 	bool
+
+config ARCH_HAS_FORTIFY_SOURCE
+	bool
+	help
+	  An architecture should select this when it can successfully
+	  build and run with CONFIG_FORTIFY_SOURCE.

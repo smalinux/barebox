@@ -8,6 +8,7 @@
 #include <linux/sizes.h>
 #include <partitions.h>
 #include <linux/math64.h>
+#include <range.h>
 
 static struct partition_desc *gpdesc;
 static bool table_needs_write;
@@ -137,6 +138,10 @@ static int do_mkpart(struct block_device *blk, int argc, char *argv[])
 	int ret;
 	uint64_t mult;
 
+	pdesc = pdesc_get(blk);
+	if (!pdesc)
+		return -EINVAL;
+
 	if (argc < 5) {
 		printf("Error: Missing required arguments\n");
 		return -EINVAL;
@@ -149,34 +154,49 @@ static int do_mkpart(struct block_device *blk, int argc, char *argv[])
 	if (ret)
 		return ret;
 
-	ret = parted_strtoull(argv[4], &end, &mult);
-	if (ret)
-		return ret;
-
 	if (!mult)
 		mult = gunit;
-
 	start *= mult;
-	end *= mult;
 
-	/* If not on sector boundaries move start up and end down */
-	start = ALIGN(start, SECTOR_SIZE);
-	end = ALIGN_DOWN(end, SECTOR_SIZE);
+	/* If not on sector boundaries round start up */
+	start = ALIGN(start, SZ_1M);
 
 	/* convert to LBA */
 	start >>= SECTOR_SHIFT;
-	end >>= SECTOR_SHIFT;
 
-	/*
-	 * When unit is >= KB then substract one sector for user convenience.
-	 * It allows to start the next partition where the previous ends
-	 */
-	if (mult >= 1000)
-		end -= 1;
+	if (!strcmp(argv[4], "max")) {
+		/* gpt requires 34 blocks at the end */
+		if (pdesc->parser->type == filetype_gpt)
+			end = blk->num_blocks - 35;
+		else if (pdesc->parser->type == filetype_mbr)
+			end = blk->num_blocks - 1;
+		else
+			return -ENOSYS;
+	} else {
+		ret = parted_strtoull(argv[4], &end, &mult);
+		if (ret)
+			return ret;
 
-	pdesc = pdesc_get(blk);
-	if (!pdesc)
+		if (!mult)
+			mult = gunit;
+		end *= mult;
+
+		/* convert to LBA */
+		end >>= SECTOR_SHIFT;
+
+		/*
+		 * When unit is >= KB then subtract one sector for user
+		 * convenience. It allows to start the next partition where the
+		 * previous ends
+		 */
+		if (mult >= 1000)
+			end -= 1;
+	}
+
+	if (end == start) {
+		printf("Error: After alignment the partition has zero size\n");
 		return -EINVAL;
+	}
 
 	ret = partition_create(pdesc, name, fs_type, start, end);
 
@@ -184,6 +204,57 @@ static int do_mkpart(struct block_device *blk, int argc, char *argv[])
 		table_needs_write = true;
 
 	return ret < 0 ? ret : 5;
+}
+
+static int do_mkpart_size(struct block_device *blk, int argc, char *argv[])
+{
+	struct partition_desc *pdesc;
+	uint64_t size, start;
+	const char *name, *fs_type;
+	int ret;
+	uint64_t mult;
+
+	if (argc < 4) {
+		printf("Error: Missing required arguments\n");
+		return -EINVAL;
+	}
+
+	name = argv[1];
+	fs_type = argv[2];
+
+	ret = parted_strtoull(argv[3], &size, &mult);
+	if (ret)
+		return ret;
+
+	if (!mult)
+		mult = gunit;
+
+	size *= mult;
+
+	/* If not on sector boundaries move start up and end down */
+	size = ALIGN(size, PARTITION_ALIGN_SIZE);
+
+	/* convert to LBA */
+	size >>= SECTOR_SHIFT;
+
+	pdesc = pdesc_get(blk);
+	if (!pdesc)
+		return -EINVAL;
+
+	ret = partition_find_free_space(pdesc, size, &start);
+	if (ret) {
+		printf("No free space for %llu sectors found\n", size);
+		return ret;
+	}
+
+	printf("%s: creating partition with %llu blocks at %llu\n", __func__, size, start);
+
+	ret = partition_create(pdesc, name, fs_type, start, start + size - 1);
+
+	if (!ret)
+		table_needs_write = true;
+
+	return ret < 0 ? ret : 4;
 }
 
 static int do_rmpart(struct block_device *blk, int argc, char *argv[])
@@ -261,6 +332,9 @@ struct parted_command parted_commands[] = {
 		.name = "mkpart",
 		.command = do_mkpart,
 	}, {
+		.name = "mkpart_size",
+		.command = do_mkpart_size,
+	},  {
 		.name = "print",
 		.command = do_print,
 	}, {
@@ -306,7 +380,7 @@ static int do_parted(int argc, char *argv[])
 	if (argc < 3)
 		return COMMAND_ERROR_USAGE;
 
-	cdev = cdev_open_by_name(argv[1], O_RDWR);
+	cdev = cdev_open_by_path_name(argv[1], O_RDWR);
 	if (!cdev) {
 		printf("Cannot open %s\n", argv[1]);
 		return COMMAND_ERROR;
@@ -354,6 +428,7 @@ BAREBOX_CMD_HELP_OPT ("print", "print partitions")
 BAREBOX_CMD_HELP_OPT ("mklabel <type>", "create a new partition table")
 BAREBOX_CMD_HELP_OPT ("rm <num>", "remove a partition")
 BAREBOX_CMD_HELP_OPT ("mkpart <name> <fstype> <start> <end>", "create a new partition")
+BAREBOX_CMD_HELP_OPT ("mkpart_size <name> <fstype> <size>", "create a new partition")
 BAREBOX_CMD_HELP_OPT ("unit <unit>", "change display/input units")
 BAREBOX_CMD_HELP_OPT ("refresh", "refresh a partition table")
 BAREBOX_CMD_HELP_TEXT("")
@@ -363,6 +438,7 @@ BAREBOX_CMD_HELP_TEXT("<type> must be \"gpt\" or \"msdos\"")
 BAREBOX_CMD_HELP_TEXT("<fstype> can be one of  \"ext2\", \"ext3\", \"ext4\", \"fat16\", \"fat32\" or \"bbenv\"")
 BAREBOX_CMD_HELP_TEXT("<name> for MBR partition tables can be one of \"primary\", \"extended\" or")
 BAREBOX_CMD_HELP_TEXT("\"logical\". For GPT this is a name string.")
+BAREBOX_CMD_HELP_TEXT("<end> can be \"max\" it will take all remaining space")
 BAREBOX_CMD_HELP_END
 
 BAREBOX_CMD_START(parted)

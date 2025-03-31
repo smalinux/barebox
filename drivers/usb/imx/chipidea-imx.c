@@ -57,8 +57,8 @@ static int imx_chipidea_port_init(void *drvdata)
 		if (IS_ENABLED(CONFIG_USB_ULPI)) {
 			ret = ulpi_setup(ci->base + 0x170, 1);
 			if (ret)
-				dev_err(ci->dev, "ULPI setup failed with %s\n",
-						strerror(-ret));
+				dev_err(ci->dev, "ULPI setup failed with %pe\n",
+						ERR_PTR(ret));
 			mdelay(20);
 		} else {
 			dev_err(ci->dev, "no ULPI support available\n");
@@ -72,7 +72,7 @@ static int imx_chipidea_port_init(void *drvdata)
 	if (ci->have_usb_misc) {
 		ret = imx_usbmisc_port_init(ci->usbmisc, ci->portno, ci->flags);
 		if (ret)
-			dev_err(ci->dev, "misc init failed: %s\n", strerror(-ret));
+			dev_err(ci->dev, "misc init failed: %pe\n", ERR_PTR(ret));
 	}
 
 	/* PFSC bit is reset by ehci_reset(), thus have to set it not in
@@ -94,7 +94,7 @@ static int imx_chipidea_port_post_init(void *drvdata)
 	if (ci->have_usb_misc) {
 		ret = imx_usbmisc_port_post_init(ci->usbmisc, ci->portno, ci->flags);
 		if (ret)
-			dev_err(ci->dev, "post misc init failed: %s\n", strerror(-ret));
+			dev_err(ci->dev, "post misc init failed: %pe\n", ERR_PTR(ret));
 	}
 
 	return ret;
@@ -217,7 +217,7 @@ static int ci_set_mode(void *ctx, enum usb_dr_mode mode)
 static int imx_chipidea_probe(struct device *dev)
 {
 	struct resource *iores;
-	struct imx_chipidea_data *imx_data;
+	const struct imx_chipidea_data *imx_data;
 	struct imxusb_platformdata *pdata = dev->platform_data;
 	char const *phynode_name;
 	int ret;
@@ -229,8 +229,8 @@ static int imx_chipidea_probe(struct device *dev)
 	ci->dev = dev;
 	dev->priv = ci;
 
-	ret = dev_get_drvdata(dev, (const void **)&imx_data);
-	if (!ret)
+	imx_data = device_get_match_data(dev);
+	if (imx_data)
 		ci->have_usb_misc = imx_data->have_usb_misc;
 
 	if (IS_ENABLED(CONFIG_OFDEVICE) && dev->of_node) {

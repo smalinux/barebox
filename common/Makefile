@@ -2,9 +2,11 @@
 
 obj-y				+= boards/
 obj-y				+= memory.o
+obj-$(CONFIG_STRUCTIO)		+= structio.o
 obj-y				+= memory_display.o
 pbl-$(CONFIG_PBL_CONSOLE)	+= memory_display.o
 obj-y				+= clock.o
+pbl-$(CONFIG_PBL_CLOCKSOURCE)	+= clock.o
 obj-y				+= console_common.o
 obj-$(CONFIG_OFDEVICE)		+= deep-probe.o
 obj-y				+= startup.o
@@ -30,8 +32,8 @@ obj-$(CONFIG_BOOTM)		+= bootm.o booti.o
 obj-$(CONFIG_CMD_LOADS)		+= s_record.o
 obj-$(CONFIG_MEMTEST)		+= memtest.o
 obj-$(CONFIG_COMMAND_SUPPORT)	+= command.o
-obj-$(CONFIG_CONSOLE_FULL)	+= console.o
-obj-$(CONFIG_CONSOLE_SIMPLE)	+= console_simple.o
+obj-$(CONFIG_CONSOLE_FULL)	+= console.o console_ctrlc.o
+obj-$(CONFIG_CONSOLE_SIMPLE)	+= console_simple.o console_ctrlc.o
 obj-y				+= console_countdown.o
 obj-pbl-$(CONFIG_DDR_SPD)	+= ddr_spd.o
 obj-pbl-$(CONFIG_DDR_SPD)	+= ddr1_dimm_params.o
@@ -48,7 +50,6 @@ obj-$(CONFIG_FLEXIBLE_BOOTARGS)	+= bootargs.o
 obj-$(CONFIG_GLOBALVAR)		+= globalvar.o
 obj-$(CONFIG_GREGORIAN_CALENDER) += date.o
 obj-$(CONFIG_KALLSYMS)		+= kallsyms.o
-obj-$(CONFIG_MALLOC_DLMALLOC)	+= dlmalloc.o
 obj-$(CONFIG_MALLOC_TLSF)	+= tlsf_malloc.o tlsf.o calloc.o
 KASAN_SANITIZE_tlsf.o := n
 obj-$(CONFIG_MALLOC_DUMMY)	+= dummy_malloc.o calloc.o
@@ -59,7 +60,6 @@ obj-$(CONFIG_MODULES)		+= module.o
 extra-$(CONFIG_MODULES)		+= module.lds
 obj-$(CONFIG_OFTREE)		+= oftree.o
 obj-$(CONFIG_PARTITION_DISK)	+= partitions.o partitions/
-obj-$(CONFIG_PASSWORD)		+= password.o
 obj-$(CONFIG_HAS_SCHED)		+= sched.o
 obj-$(CONFIG_POLLER)		+= poller.o
 obj-$(CONFIG_BTHREAD)		+= bthread.o
@@ -67,6 +67,7 @@ obj-$(CONFIG_RESET_SOURCE)	+= reset_source.o
 obj-$(CONFIG_SHELL_HUSH)	+= hush.o
 obj-$(CONFIG_SHELL_SIMPLE)	+= parser.o
 obj-$(CONFIG_STATE)		+= state/
+obj-$(CONFIG_TLV)		+= tlv/
 obj-$(CONFIG_RATP)		+= ratp/
 obj-$(CONFIG_BOOTCHOOSER)	+= bootchooser.o
 obj-$(CONFIG_UIMAGE)		+= uimage_types.o uimage.o
@@ -78,33 +79,12 @@ obj-y				+= file-list.o
 obj-$(CONFIG_FIRMWARE)		+= firmware.o
 obj-$(CONFIG_UBIFORMAT)		+= ubiformat.o
 obj-$(CONFIG_BAREBOX_UPDATE_IMX_NAND_FCB) += imx-bbu-nand-fcb.o
-obj-$(CONFIG_BOOT)		+= boot.o
+obj-$(CONFIG_BOOT)		+= boot.o bootscan.o
+obj-$(CONFIG_BOOT_DEFAULTS)	+= bootdef.o
 obj-$(CONFIG_SERIAL_DEV_BUS)	+= serdev.o
 obj-$(CONFIG_USB_GADGET)	+= usbgadget.o
-obj-pbl-$(CONFIG_HAVE_OPTEE)	+= optee.o
 obj-$(CONFIG_FASTBOOT_BASE)	+= fastboot.o
-
-ifdef CONFIG_PASSWORD
-
-ifeq ($(CONFIG_PASSWORD_DEFAULT),"")
-define filechk_passwd
-	echo "static const char default_passwd[] = \"\";"
-endef
-else
-define filechk_passwd
-(							\
-echo -n "static const char default_passwd[] = \"";	\
-cat $(shell find $(srctree) -name $(CONFIG_PASSWORD_DEFAULT) -type f) | tr -d '\n';\
-echo "\";"						\
-)
-endef
-endif
-
-include/generated/passwd.h: FORCE
-	$(call filechk,passwd)
-
-$(obj)/password.o: include/generated/passwd.h
-endif # CONFIG_PASSWORD
+obj-$(CONFIG_CDEV_ALIAS)	+= cdev-alias.o
 
 # dependencies on generated files need to be listed explicitly
 $(obj)/version.o: include/generated/compile.h

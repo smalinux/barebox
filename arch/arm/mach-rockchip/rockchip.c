@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <common.h>
 #include <init.h>
-#include <asm/optee.h>
+#include <tee/optee.h>
 #include <asm-generic/memory_layout.h>
 #include <mach/rockchip/rockchip.h>
 #include <mach/rockchip/bootrom.h>
@@ -21,6 +21,8 @@ int rockchip_soc(void)
 		__rockchip_soc = 3566;
 	else if (of_machine_is_compatible("rockchip,rk3568"))
 		__rockchip_soc = 3568;
+	else if (of_machine_is_compatible("rockchip,rk3576"))
+		__rockchip_soc = 3576;
 	else if (of_machine_is_compatible("rockchip,rk3588"))
 		__rockchip_soc = 3588;
 
@@ -51,6 +53,8 @@ static int rockchip_init(void)
 		return rk3568_init();
 	case 3568:
 		return rk3568_init();
+	case 3576:
+		return rk3576_init();
 	case 3588:
 		return rk3588_init();
 	}

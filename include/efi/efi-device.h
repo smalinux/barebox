@@ -33,10 +33,7 @@ static inline struct efi_device *to_efi_device(struct device *dev)
 	return container_of(dev, struct efi_device, dev);
 }
 
-static inline struct efi_driver *to_efi_driver(struct driver *drv)
-{
-	return container_of(drv, struct efi_driver, driver);
-}
+#define to_efi_driver(drv) container_of_const((drv), struct efi_driver, driver)
 
 static inline int efi_driver_register(struct efi_driver *efidrv)
 {
@@ -69,7 +66,7 @@ int __efi_locate_handle(struct efi_boot_services *bs,
 		enum efi_locate_search_type search_type,
 		efi_guid_t *protocol,
 		void *search_key,
-		unsigned long *no_handles,
+		size_t *no_handles,
 		efi_handle_t **buffer);
 
 #endif /* __EFI_EFI_DEVICE_H */

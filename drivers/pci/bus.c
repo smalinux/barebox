@@ -73,19 +73,19 @@ const struct pci_device_id *pci_match_id(const struct pci_device_id *ids,
 }
 EXPORT_SYMBOL(pci_match_id);
 
-static int pci_match(struct device *dev, struct driver *drv)
+static int pci_match(struct device *dev, const struct driver *drv)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
-	struct pci_driver *pdrv = to_pci_driver(drv);
+	const struct pci_driver *pdrv = to_pci_driver(drv);
 	const struct pci_device_id *id;
 
 	for (id = pdrv->id_table; id->vendor; id++)
 		if (pci_match_one_device(id, pdev)) {
 			pdev->id = id;
-			return 0;
+			return true;
 		}
 
-	return -1;
+	return false;
 }
 
 static int pci_probe(struct device *dev)
@@ -133,7 +133,6 @@ int pci_register_driver(struct pci_driver *pdrv)
 
 int pci_register_device(struct pci_dev *pdev)
 {
-	char str[6];
 	struct device *dev = &pdev->dev;
 	int ret;
 
@@ -149,16 +148,11 @@ int pci_register_device(struct pci_dev *pdev)
 	if (ret)
 		return ret;
 
-	sprintf(str, "%02x", pdev->devfn);
-	dev_add_param_fixed(dev, "devfn", str);
-	sprintf(str, "%04x", (pdev->class >> 8) & 0xffff);
-	dev_add_param_fixed(dev, "class", str);
-	sprintf(str, "%04x", pdev->vendor);
-	dev_add_param_fixed(dev, "vendor", str);
-	sprintf(str, "%04x", pdev->device);
-	dev_add_param_fixed(dev, "device", str);
-	sprintf(str, "%04x", pdev->revision);
-	dev_add_param_fixed(dev, "revision", str);
+	dev_add_param_uint32_fixed(dev, "devfn", pdev->devfn, "%02x");
+	dev_add_param_uint32_fixed(dev, "class", (pdev->class >> 8) & 0xffff, "%04x");
+	dev_add_param_uint32_fixed(dev, "vendor", pdev->vendor, "%04x");
+	dev_add_param_uint32_fixed(dev, "device", pdev->device, "%04x");
+	dev_add_param_uint32_fixed(dev, "revision", pdev->revision, "%04x");
 
 	return 0;
 }

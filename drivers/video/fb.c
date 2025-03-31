@@ -9,6 +9,8 @@
 #include <fs.h>
 #include <init.h>
 
+DEFINE_DEV_CLASS(fb_class, "fb");
+
 static int fb_ioctl(struct cdev* cdev, unsigned int req, void *data)
 {
 	struct fb_info *info = cdev->priv;
@@ -291,6 +293,11 @@ static int fb_set_shadowfb(struct param_d *p, void *priv)
 	return fb_alloc_shadowfb(info);
 }
 
+static const char *mode_name(struct fb_videomode *mode)
+{
+	return basprintf("%dx%d@%d", mode->xres, mode->yres, mode->refresh);
+}
+
 int register_framebuffer(struct fb_info *info)
 {
 	int id;
@@ -318,7 +325,7 @@ int register_framebuffer(struct fb_info *info)
 
 		info->cdev.name = basprintf("%s_%d", dev_name(&info->base_plane->dev), ovl_id);
 		dev->id = DEVICE_ID_SINGLE;
-		dev_set_name(dev, info->cdev.name);
+		dev_set_name(dev, "%s", info->cdev.name);
 	} else {
 		id = get_free_deviceid("fb");
 		dev->id = id;
@@ -341,6 +348,8 @@ int register_framebuffer(struct fb_info *info)
 	if (ret)
 		goto err_free;
 
+	class_add_device(&fb_class, &info->dev);
+
 	dev_add_param_bool(dev, "enable", fb_enable_set, fb_enable_get,
 			&info->p_enable, info);
 
@@ -351,10 +360,18 @@ int register_framebuffer(struct fb_info *info)
 
 	names = xzalloc(sizeof(char *) * num_modes);
 
-	for (i = 0; i < info->modes.num_modes; i++)
+	for (i = 0; i < info->modes.num_modes; i++) {
+		if (!info->modes.modes[i].name)
+			info->modes.modes[i].name = mode_name(&info->modes.modes[i]);
 		names[i] = info->modes.modes[i].name;
-	for (i = 0; i < info->edid_modes.num_modes; i++)
+	}
+
+	for (i = 0; i < info->edid_modes.num_modes; i++) {
+		if (!info->edid_modes.modes[i].name)
+			info->modes.modes[i].name = mode_name(&info->edid_modes.modes[i]);
 		names[i + info->modes.num_modes] = info->edid_modes.modes[i].name;
+	}
+
 	dev_add_param_enum(dev, "mode_name", fb_set_modename, NULL, &info->current_mode, names, num_modes, info);
 	info->shadowfb = 1;
 	dev_add_param_bool(dev, "shadowfb", fb_set_shadowfb, NULL, &info->shadowfb, info);
@@ -370,8 +387,8 @@ int register_framebuffer(struct fb_info *info)
 	if (IS_ENABLED(CONFIG_DRIVER_VIDEO_SIMPLEFB)) {
 		ret = fb_register_simplefb(info);
 		if (ret)
-			dev_err(&info->dev, "failed to register simplefb: %s\n",
-					strerror(-ret));
+			dev_err(&info->dev, "failed to register simplefb: %pe\n",
+					ERR_PTR(ret));
 	}
 
 	if (IS_ENABLED(CONFIG_FRAMEBUFFER_CONSOLE))

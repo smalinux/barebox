@@ -28,7 +28,7 @@
 #define DEFAULT_GPIO_RESET_ASSERT       1000      /* us */
 #define DEFAULT_GPIO_RESET_DEASSERT     1000      /* us */
 
-LIST_HEAD(mii_bus_list);
+DEFINE_DEV_CLASS(mii_class, "mii");
 
 static struct phy_device *mdio_device_create(struct mii_bus *bus, int addr)
 {
@@ -98,7 +98,7 @@ int mdiobus_detect(struct device *dev)
 			continue;
 		ret = phy_register_device(phydev);
 		if (ret)
-			dev_err(dev, "failed to register phy: %s\n", strerror(-ret));
+			dev_err(dev, "failed to register phy: %pe\n", ERR_PTR(ret));
 		dev_dbg(dev, "registered phy as /dev/%s\n", phydev->cdev.name);
 	}
 
@@ -312,7 +312,7 @@ int mdiobus_register(struct mii_bus *bus)
 	if (bus->reset)
 		bus->reset(bus);
 
-	list_add_tail(&bus->list, &mii_bus_list);
+	class_add_device(&mii_class, &bus->dev);
 
 	pr_info("%s: probed\n", dev_name(&bus->dev));
 
@@ -342,7 +342,7 @@ void mdiobus_unregister(struct mii_bus *bus)
 
 	slice_exit(&bus->slice);
 
-	list_del(&bus->list);
+	list_del_init(&bus->dev.class_list);
 }
 EXPORT_SYMBOL(mdiobus_unregister);
 
@@ -415,20 +415,20 @@ EXPORT_SYMBOL(of_mdio_find_bus);
  * Description: Given a PHY device, and a PHY driver, return 0 if
  *   the driver supports the device.  Otherwise, return 1.
  */
-static int mdio_bus_match(struct device *dev, struct driver *drv)
+static int mdio_bus_match(struct device *dev, const struct driver *drv)
 {
-	struct phy_device *phydev = to_phy_device(dev);
-	struct phy_driver *phydrv = to_phy_driver(drv);
+	const struct phy_device *phydev = to_phy_device(dev);
+	const struct phy_driver *phydrv = to_phy_driver(drv);
 
 	if (phydrv->is_phy) {
 		if ((phydrv->phy_id & phydrv->phy_id_mask) ==
 		    (phydev->phy_id & phydrv->phy_id_mask))
-		return 0;
+		return true;
 	} else {
 		return device_match(dev, drv);
 	}
 
-	return 1;
+	return false;
 }
 
 /**

@@ -30,7 +30,7 @@ SECTIONS
 	}
 	BAREBOX_BARE_INIT_SIZE
 
-	. = ALIGN(4);
+	. = ALIGN(4096);
 	__start_rodata = .;
 	.rodata : {
 		*(.rodata*)
@@ -53,6 +53,7 @@ SECTIONS
 		__stop_unwind_tab = .;
 	}
 #endif
+	. = ALIGN(4096);
 	__end_rodata = .;
 	_etext = .;
 	_sdata = .;
@@ -61,8 +62,6 @@ SECTIONS
 	.data : { *(.data*)
 		CONSTRUCTORS
 	}
-
-	.barebox_imd : { BAREBOX_IMD }
 
 	. = .;
 

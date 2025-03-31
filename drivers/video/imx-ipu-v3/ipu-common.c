@@ -749,9 +749,9 @@ static int ipu_probe(struct device *dev)
 	int i, ret;
 	const struct ipu_devtype *devtype;
 
-	ret = dev_get_drvdata(dev, (const void **)&devtype);
-	if (ret)
-		return ret;
+	devtype = device_get_match_data(dev);
+	if (!devtype)
+		return -ENODEV;
 
 	iores = dev_request_mem_resource(dev, 0);
 	if (IS_ERR(iores))
@@ -810,7 +810,7 @@ static int ipu_probe(struct device *dev)
 
 	ret = devtype->reset(ipu);
 	if (ret) {
-		dev_err(dev, "failed to reset: %s\n", strerror(-ret));
+		dev_err(dev, "failed to reset: %pe\n", ERR_PTR(ret));
 		goto out_failed_reset;
 	}
 

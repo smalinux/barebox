@@ -29,13 +29,12 @@ amba_lookup(const struct amba_id *table, struct amba_device *dev)
 	return ret ? table : NULL;
 }
 
-static int amba_match(struct device *dev, struct driver *drv)
+static int amba_match(struct device *dev, const struct driver *drv)
 {
 	struct amba_device *pcdev = to_amba_device(dev);
+	const struct amba_driver *pcdrv = to_amba_driver(drv);
 
-	struct amba_driver *pcdrv = to_amba_driver(drv);
-
-	return amba_lookup(pcdrv->id_table, pcdev) == NULL;
+	return amba_lookup(pcdrv->id_table, pcdev) != NULL;
 }
 
 static int amba_get_enable_pclk(struct amba_device *pcdev)
@@ -144,7 +143,7 @@ int amba_device_add(struct amba_device *dev)
 		cid = amba_device_get_cid(tmp, size);
 
 		if (IS_ENABLED(CONFIG_ARM_AMBA_DABT_MASK) && data_abort_unmask()) {
-			dev_err(amba_bustype.dev,
+			dev_err(&amba_bustype.dev,
 				"data abort during MMIO read of PID/CID for %pOF\n",
 				dev->dev.of_node);
 			ret = -EFAULT;
@@ -188,7 +187,7 @@ struct amba_device *amba_device_alloc(const char *name, int id, resource_size_t 
 
 	dev = xzalloc(sizeof(*dev));
 
-	dev_set_name(&dev->dev, name);
+	dev_set_name(&dev->dev, "%s", name);
 	dev->dev.id = id;
 	dev->res.start = base;
 	dev->res.end = base + size - 1;

@@ -22,6 +22,9 @@ config MISSING_FIRMWARE_ERROR
 	  If in doubt, say Y and refer to the documentation on where to acquire the
 	  needed firmware.
 
+config FIRMWARE_IMX_DDR3_PMU_TRAIN
+	bool
+
 config FIRMWARE_IMX_LPDDR4_PMU_TRAIN
 	bool
 
@@ -41,6 +44,9 @@ config FIRMWARE_IMX8MQ_ATF
 	bool
 
 config FIRMWARE_IMX93_ATF
+	bool
+
+config FIRMWARE_AGILEX5_ATF
 	bool
 
 config FIRMWARE_IMX8MM_OPTEE

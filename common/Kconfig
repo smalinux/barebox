@@ -18,6 +18,11 @@ config CLANG_VERSION
 	default $(cc-version) if CC_IS_CLANG
 	default 0
 
+config CLANG_RUNTIME_DIR
+	string
+	depends on CC_IS_CLANG
+	default "$(clang-runtime-dir)"
+
 config GREGORIAN_CALENDER
 	bool
 
@@ -50,6 +55,10 @@ config BLOCK_STATS
 config FILETYPE
 	bool
 
+config STRUCTIO
+	bool
+	select PARAMETER
+
 config BINFMT
 	bool
 	select FILETYPE
@@ -72,6 +81,9 @@ config LOGBUF
 	bool
 
 config STDDEV
+	bool
+
+config CDEV_ALIAS
 	bool
 
 config MENUTREE
@@ -104,6 +116,18 @@ config FASTBOOT_BASE
 
 menu "General Settings"
 
+config NAME
+	string "Informational config name to include in binary"
+	help
+	  Unless left empty, this compiles into barebox an informational
+	  string describing the config used. This is reproduced by the
+	  version command, but does not influence any runtime or
+	  compile-time behavior.
+
+	  For testing, pytest will use this option to determine, which
+	  Labgrid environment YAML to use if none was specified by the
+	  user.
+
 config LOCALVERSION
 	string "Local version - append to the version string"
 	help
@@ -132,28 +156,6 @@ config LOCALVERSION_AUTO
 	    $ git rev-parse --verify HEAD
 
 	  which is done within the script "scripts/setlocalversion".)
-
-config HAS_INSECURE_DEFAULTS
-	bool
-	help
-	  This is selected by options that have potentially insecure defaults.
-	  Extra care needs to be taken when these options are not disabled
-	  in secure booted systems.
-
-	  Any option selecting this should include in its help text
-	  an explanation of the security considerations.
-
-config INSECURE
-	bool "enable convenient defaults that are unsuitable for secure-booting systems"
-	default y
-	select HAS_INSECURE_DEFAULTS
-	help
-	  Say n here when barebox is part of a secure boot chain and you
-	  want to disable defaults that may compromise the boot chain.
-
-	  This option is a moving target. Currently it:
-
-	    - changes the default of global.env.autoprobe to 1
 
 config BANNER
 	bool "display banner"
@@ -297,6 +299,11 @@ config MALLOC_SIZE
 	default 0x400000
 	prompt "malloc area size"
 
+config SCRATCH_SIZE
+	hex
+	default 0x8000
+	prompt "Scratch size"
+
 config MALLOC_ALIGNMENT
 	hex
 	default 8
@@ -312,9 +319,7 @@ config EXPERIMENTAL
 
 choice
 	prompt "malloc implementation"
-
-config MALLOC_DLMALLOC
-	bool "dlmalloc"
+	default MALLOC_TLSF
 
 config MALLOC_TLSF
 	bool "tlsf"
@@ -371,6 +376,7 @@ config RELOCATABLE
 
 choice
 	prompt "Configure action on fatal error"
+	default PANIC_TRAP if SANDBOX
 	default PANIC_RESET
 
 	config PANIC_POWEROFF
@@ -401,6 +407,14 @@ choice
 		  This option enables reset of the system in case of a
 		  fatal error, so you don't have to reset it manually.
 		  This is the recommended configuration in production.
+
+	config PANIC_TRAP
+		bool "invoke a trap instruction"
+		help
+		  This option triggers the trap instruction emitted by
+		  __builtin_trap() on fatal errors.
+		  This is mainly useful when running under a debugger
+		  or debugging instrumentation.
 
 endchoice
 
@@ -504,6 +518,7 @@ config HUSH_FANCY_PROMPT
 	help
 	  Allow to set PS1 from the command line. PS1 can have several escaped commands
 	  like \h for the 'model' string or \w for the current working directory.
+	  PS1 can be set statically or computed on demand by executing PROMPT_COMMAND.
 
 config CMDLINE_EDITING
 	depends on !SHELL_NONE
@@ -523,53 +538,6 @@ config MENU
 	help
 	  a menu framework that allow us to create list menu to simplify
 	  barebox and make it more user-friendly
-
-config PASSWORD
-	bool
-	prompt "Password Framework"
-	select DIGEST
-	help
-	  allow you to have password protection framework
-
-config PASSWORD_DEFAULT
-	string
-	prompt "Password default file"
-	depends on PASSWORD
-	help
-	  Set this to a file which is used as default password file. This file
-	  has to contain the passwd encoded with the selected password digest.
-	  i.e.:
-	  echo -ne "MyPassword" | md5sum | while read a b; do echo $a > passwdfile; done
-
-
-if PASSWORD
-
-choice
-	prompt "passwd checksum"
-
-config PASSWD_SUM_MD5
-	bool "MD5"
-	select DIGEST_MD5_GENERIC
-
-config PASSWD_SUM_SHA1
-	bool "SHA1"
-	select DIGEST_SHA1_GENERIC
-
-config PASSWD_SUM_SHA256
-	bool "SHA256"
-	select DIGEST_SHA256_GENERIC
-
-config PASSWD_SUM_SHA512
-	bool "SHA512"
-	select DIGEST_SHA512_GENERIC
-
-config PASSWD_CRYPTO_PBKDF2
-	bool "PBKDF2"
-	select CRYPTO_PBKDF2
-
-endchoice
-
-endif
 
 config ERRNO_MESSAGES
 	bool
@@ -628,8 +596,8 @@ config BOOTM_INITRD
 	  -L ADDR    specify initrd load address
 
 config BOOTM_OFTREE
-	bool
-	depends on BOOTM
+	def_bool y
+	depends on BOOTM && HAVE_ARCH_BOOTM_OFTREE
 	select OFTREE
 	prompt "device tree (oftree) support"
 	help
@@ -637,6 +605,24 @@ config BOOTM_OFTREE
 	  this command line option:
 
 	  -o DTS  specify device tree
+
+config BOOTM_OFTREE_FALLBACK
+	def_bool y
+	# We intentionally don't depend on BOOTM_OFTREE, because many boards
+	# don't enable it and instead rely on OFTREE being selected...
+	depends on BOOTM && HAVE_ARCH_BOOTM_OFTREE && OFTREE
+	prompt "pass along barebox' own DT as fallback"
+	help
+	  Say y here to substitute in the barebox device tree, when no kernel
+	  device tree was supplied. If unsure, say n.
+
+	  It's recommended to boot a kernel with the device tree that was
+	  shipped with it as DT binding breakage is not an infrequent
+	  occurrence.
+
+	  This especially applies to A/B boot setups, where each kernel
+	  should have its own DT, so fallback restores the system cleanly
+	  to the old state.
 
 config BOOTM_UIMAGE
 	def_bool y
@@ -668,14 +654,6 @@ config PE
 config ELF
 	bool "ELF Support" if COMPILE_TEST
 
-config BOOTM_ELF
-	bool
-	depends on BOOTM
-	select ELF
-	prompt "elf loading support"
-	help
-	  Add support to load elf file with bootm.
-
 config BOOTM_FITIMAGE
 	bool
 	prompt "FIT image support"
@@ -700,38 +678,6 @@ config BOOTM_FITIMAGE_SIGNATURE
 	  https://docs.u-boot.org/en/stable/usage/fit/signature.html
 	  Additionally the barebox device tree needs a /signature node with the
 	  public key needed to approve the image's signature.
-
-config BOOTM_FITIMAGE_PUBKEY_ENV
-	bool "Specify path to public key in environment"
-	depends on BOOTM_FITIMAGE_SIGNATURE
-	help
-	  If this option is enabled the path to the device tree snippet
-	  containing the public key for verifying FIT images signature is taken
-	  from make's build-time environment, which can allow for better
-	  integration with some build systems.
-
-	  The environment variable has the same name as the corresponding
-	  Kconfig variable:
-
-	  CONFIG_BOOTM_FITIMAGE_PUBKEY
-
-if BOOTM_FITIMAGE_SIGNATURE && !BOOTM_FITIMAGE_PUBKEY_ENV
-
-config BOOTM_FITIMAGE_PUBKEY
-	string "Path to dtsi containing pubkey"
-	default "../fit/pubkey.dtsi"
-	depends on BOOTM_FITIMAGE_SIGNATURE
-	help
-	  Set Path to a dts snippet which holds the public keys for FIT images. The
-	  snippet can then be included in a device tree with
-	  "#include CONFIG_BOOTM_FITIMAGE_PUBKEY".
-
-	  This snippet is usually generated by decompiling a device tree produced
-	  by mkimage. An alternative is CONFIG_CRYPTO_PUBLIC_KEYS, which takes a list
-	  of PEM files or PKCS#11 URIs (with optional key name hints, see its help
-	  text).
-
-endif
 
 config BOOTM_FORCE_SIGNED_IMAGES
 	bool
@@ -779,6 +725,17 @@ config FLEXIBLE_BOOTARGS
 	  This allows for more flexible scripting since with it it's possible
 	  to replace parts of the bootargs string without reconstructing it
 	  completely.
+
+config ROOTWAIT_BOOTARG
+	def_bool y
+	prompt "fixup 'rootwait' into kernel command-line when needed"
+	depends on FLEXIBLE_BOOTARGS
+	help
+	  Adds a rootwait= argument into the kernel command-line argument
+	  for boot media that requires it, like USB, SD/MMC or NFS.
+	  The duration chosen is controlled by the linux.rootwait
+	  parameter and defaults to 10 seconds. Setting the variable
+	  to 0 will wait indefinitely.
 
 config MMCBLKDEV_ROOTARG
 	bool
@@ -935,7 +892,7 @@ config CONSOLE_DISABLE_INPUT
 	  registered as consoles.
 
 config PBL_CONSOLE
-	depends on PBL_IMAGE
+	depends on PBL_IMAGE && !SANDBOX
 	depends on !CONSOLE_NONE
 	bool "Enable console support in PBL"
 	help
@@ -1111,6 +1068,11 @@ config DEFAULT_ENVIRONMENT_GENERIC_NEW_REBOOT_MODE
 	depends on DEFAULT_ENVIRONMENT_GENERIC_NEW
 	depends on REBOOT_MODE
 
+config DEFAULT_ENVIRONMENT_GENERIC_NEW_SECURITY_POLICY
+	bool "Update PS1 according to active security policy"
+	depends on DEFAULT_ENVIRONMENT_GENERIC_NEW
+	depends on SECURITY_POLICY
+
 config DEFAULT_ENVIRONMENT_GENERIC_NEW_IKCONFIG
 	bool "Ship .config as /env/data/config"
 	depends on DEFAULT_ENVIRONMENT_GENERIC_NEW
@@ -1135,6 +1097,15 @@ config POLLER
 	bool "generic polling infrastructure"
 	select HAS_SCHED
 
+config POLLER_WARN_OVERTIME
+	bool "warn on poller overtime"
+	depends on POLLER
+	default y
+	help
+	  Pollers are meant to poll and quickly execute actions.
+	  exceeding the maximum runtime of POLLER_MAX_RUNTIME_MS
+	  will trigger a one-time warning.
+
 config BTHREAD
 	bool "barebox co-operative (green) thread infrastructure"
 	select HAS_SCHED
@@ -1143,6 +1114,35 @@ config BTHREAD
 	  barebox threads are lightweight cooperative (green) threads that are
 	  scheduled within delay loops and the console idle to asynchronously
 	  execute actions, like checking for link up or feeding a watchdog.
+
+config TLV
+	bool "barebox TLV support"
+	depends on OFDEVICE
+	help
+	  barebox TLV is a scheme for storing factory data on non-volatile
+	  storage. Unlike state, it's meant to be read-only.
+
+config TLV_SIGNATURE
+	bool "barebox TLV signature support"
+	depends on TLV
+	select CRYPTO_BUILTIN_KEYS
+
+config TLV_DRV
+	bool "barebox TLV generic driver"
+	depends on TLV
+	default y
+	help
+	  barebox,tlv devices in the device tree will be matched against
+	  a compatible decoder via the 4-byte magic header.
+
+config TLV_BAREBOX
+	bool "barebox TLV common format"
+	depends on TLV
+	depends on PARAMETER
+	select PRINTF_HEXSTR
+	default y
+	help
+	  Decoder support for the common barebox TLV format.
 
 config STATE
 	bool "generic state infrastructure"
@@ -1192,6 +1192,34 @@ config BOOTCHOOSER
 	select OFTREE
 	select PARAMETER
 
+config BOOT_DEFAULTS
+	bool "default boot targets"
+	select BOOT
+	select CDEV_ALIAS
+	default BLSPEC && OFDEVICE
+	help
+	  Say y here to enable a number of default boot targets that
+	  determine at runtime what to do. An example is the bootsource
+	  target, which will expand to the device that barebox has
+	  booted from if that could be determined.
+
+config BAREBOX_DT_2ND
+	bool "Consume DT bindings relevant only when barebox is booted by barebox"
+	depends on OFDEVICE
+	default BOARD_GENERIC_DT
+	help
+	  Barebox fixes up a number of device tree properties into the kernel
+	  device tree that it does not itself consume.
+	  Say y here for barebox to not only provide, but also consume
+	  these device tree bindings.
+
+	  This is currently:
+
+	    /chosen/bootsource: Maintain the bootsource, even if SoC
+	    bootsource info is lost.
+
+	  If unsure, say n.
+
 config RESET_SOURCE
 	bool "detect Reset cause"
 	depends on GLOBALVAR
@@ -1218,6 +1246,16 @@ config MACHINE_ID
 
 	  Note: if no hashable information is available no machine id will be passed
 	  to the kernel.
+
+config SERIAL_NUMBER_FIXUP_SYSTEMD_HOSTNAME
+	bool "append board serial number to systemd.hostname= fixup"
+	depends on FLEXIBLE_BOOTARGS
+	help
+	  When a systemd.hostname= kernel command line argument is
+	  fixed up, append a `-${global.serial_number}' suffix.
+
+	  This option without effect if global.bootm.provide_hostname
+	  is unset.
 
 config SYSTEMD_OF_WATCHDOG
 	bool "inform devicetree-enabled kernel of used watchdog"
@@ -1253,62 +1291,6 @@ config EXTERNAL_DTS_FRAGMENTS
 	  to add dts fragments from outside the Barebox source tree into the
 	  Barebox build.
 
-menu "OP-TEE loading"
-
-config HAVE_OPTEE
-	bool
-	help
-	  This symbol is selected by configuration where barebox either
-	  starts OP-TEE or runs while OP-TEE is running. Actual
-	  bidirectional communication with OP-TEE is enabled via
-	  CONFIG_OPTEE.
-
-config OPTEE_SIZE
-	hex
-	default 0x02000000
-	prompt "OP-TEE Memory Size"
-	depends on HAVE_OPTEE
-	help
-	  Size to reserve in main memory for OP-TEE.
-	  Can be smaller than the actual size used by OP-TEE, this is used to prevent
-	  barebox from allocating memory in this area.
-
-config OPTEE_SHM_SIZE
-	hex
-	default 0x400000
-	prompt "OP-TEE Shared Memory Size"
-	depends on HAVE_OPTEE
-	help
-	  Size to reserve in main memory for OP-TEE shared memory communication.
-	  Can be used for fixing up the OP-TEE OF node.
-
-config BOOTM_OPTEE
-	bool
-	prompt "support booting OP-TEE"
-	depends on BOOTM && ARM32
-	select HAVE_OPTEE
-	select HAS_INSECURE_DEFAULTS
-	help
-	  OP-TEE is a trusted execution environment (TEE). With this option
-	  enabled barebox supports starting optee_os as part of the bootm command.
-	  Instead of the kernel bootm starts the optee_os binary which then starts
-	  the kernel in nonsecure mode. Pass the optee_os binary with the -t option
-	  or in the global.bootm.tee variable.
-
-	  This mode of late loading OP-TEE just before the kernel is deprecated
-	  in favor of early loading OP-TEE in the PBL (CONFIG_PBL_OPTEE).
-	  Early-loading greatly reduces the attack surface and is the only mode
-	  supported outside of ARMv7.
-
-config PBL_OPTEE
-	bool "Enable OP-TEE early start"
-	depends on ARM
-	depends on !THUMB2_BAREBOX
-	select HAVE_OPTEE
-	help
-	  Allows starting OP-TEE during lowlevel initialization of the PBL.
-	  Requires explicit support in the board's lowlevel file.
-
 config FILETYPE_STRINGS
 	bool "Print file types as strings"
 	default y
@@ -1316,8 +1298,6 @@ config FILETYPE_STRINGS
 	help
 	  Say yes here to include strings for filetypes in barebox. If disabled file
 	  types will be printed as numbers only.
-
-endmenu
 
 if FASTBOOT_BASE
 
@@ -1348,7 +1328,6 @@ endif
 endmenu
 
 source "common/Kconfig.debug"
-source "common/boards/Kconfig"
 
 config DDR_SPD
 	bool

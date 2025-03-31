@@ -16,6 +16,8 @@
 #include <soc/fsl/caam.h>
 #include <tee/optee.h>
 #include <mach/imx/ele.h>
+#include <mach/imx/xload.h>
+#include <mach/imx/snvs.h>
 
 /**
  * imx8m_atf_load_bl31 - Load ATF BL31 blob and transfer control to it
@@ -103,12 +105,13 @@ void imx8mm_load_bl33(void *bl33)
 	case BOOTSOURCE_SPI:
 		imx8mm_qspi_load_image(instance, bl33);
 		break;
+	case BOOTSOURCE_SPI_NOR:
+		imx8m_ecspi_load_image(instance, bl33);
+		break;
 	default:
 		printf("Unsupported bootsource BOOTSOURCE_%d\n", src);
 		hang();
 	}
-
-	handoff_data_move(bl33 - ALIGN(handoff_data_size(), 0x1000));
 
 	/*
 	 * On completion the TF-A will jump to MX8M_ATF_BL33_BASE_ADDR
@@ -153,6 +156,7 @@ __noreturn void __imx8mm_load_and_start_image_via_tfa(void *bl33)
 	imx_set_cpu_type(IMX_CPU_IMX8MM);
 	imx8mm_init_scratch_space();
 	imx8m_save_bootrom_log();
+	imx8m_setup_snvs();
 	imx8mm_load_bl33(bl33);
 
 	if (IS_ENABLED(CONFIG_FIRMWARE_IMX8MM_OPTEE)) {
@@ -193,6 +197,9 @@ void imx8mp_load_bl33(void *bl33)
 	case BOOTSOURCE_SPI:
 		imx8mp_qspi_load_image(instance, bl33);
 		break;
+	case BOOTSOURCE_SPI_NOR:
+		imx8m_ecspi_load_image(instance, bl33);
+		break;
 	default:
 		printf("Unhandled bootsource BOOTSOURCE_%d\n", src);
 		hang();
@@ -224,6 +231,7 @@ __noreturn void __imx8mp_load_and_start_image_via_tfa(void *bl33)
 	imx_set_cpu_type(IMX_CPU_IMX8MP);
 	imx8mp_init_scratch_space();
 	imx8m_save_bootrom_log();
+	imx8m_setup_snvs();
 	imx8mp_load_bl33(bl33);
 
 	if (IS_ENABLED(CONFIG_FIRMWARE_IMX8MP_OPTEE)) {
@@ -265,6 +273,9 @@ void imx8mn_load_bl33(void *bl33)
 	case BOOTSOURCE_SPI:
 		imx8mn_qspi_load_image(instance, bl33);
 		break;
+	case BOOTSOURCE_SPI_NOR:
+		imx8m_ecspi_load_image(instance, bl33);
+		break;
 	default:
 		printf("Unhandled bootsource BOOTSOURCE_%d\n", src);
 		hang();
@@ -296,6 +307,7 @@ __noreturn void __imx8mn_load_and_start_image_via_tfa(void *bl33)
 	imx_set_cpu_type(IMX_CPU_IMX8MN);
 	imx8mn_init_scratch_space();
 	imx8m_save_bootrom_log();
+	imx8m_setup_snvs();
 	imx8mn_load_bl33(bl33);
 
 	if (IS_ENABLED(CONFIG_FIRMWARE_IMX8MN_OPTEE)) {
@@ -330,6 +342,9 @@ void imx8mq_load_bl33(void *bl33)
 	case BOOTSOURCE_MMC:
 		imx8m_esdhc_load_image(instance, bl33);
 		break;
+	case BOOTSOURCE_SPI_NOR:
+		imx8m_ecspi_load_image(instance, bl33);
+		break;
 	default:
 		printf("Unhandled bootsource BOOTSOURCE_%d\n", src);
 		hang();
@@ -361,6 +376,7 @@ __noreturn void __imx8mq_load_and_start_image_via_tfa(void *bl33)
 	imx_set_cpu_type(IMX_CPU_IMX8MQ);
 	imx8mq_init_scratch_space();
 	imx8m_save_bootrom_log();
+	imx8m_setup_snvs();
 	imx8mq_load_bl33(bl33);
 
 	if (IS_ENABLED(CONFIG_FIRMWARE_IMX8MQ_OPTEE)) {

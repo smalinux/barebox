@@ -1778,12 +1778,12 @@ static int mxcnd_probe(struct device *dev)
 	struct mtd_info *mtd;
 	struct mxc_nand_host *host;
 	struct resource *iores;
-	struct mxc_nand_devtype_data* devtype;
+	const struct mxc_nand_devtype_data* devtype;
 	int err = 0;
 
-	err = dev_get_drvdata(dev, (const void **)&devtype);
-	if (err)
-		return err;
+	devtype = device_get_match_data(dev);
+	if (!devtype)
+		return -ENODEV;
 
 	/* Allocate memory for MTD device structure and private data */
 	host = devm_kzalloc(dev, sizeof(struct mxc_nand_host),
@@ -1868,8 +1868,8 @@ static int mxcnd_probe(struct device *dev)
 		dev_info(dev, "no BBT found. creating one\n");
 		err = imxnd_create_bbt(this);
 		if (err)
-			dev_warn(dev, "Failed to create bbt: %s\n",
-				 strerror(-err));
+			dev_warn(dev, "Failed to create bbt: %pe\n",
+				 ERR_PTR(err));
 		err = 0;
 	}
 

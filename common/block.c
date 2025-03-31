@@ -12,6 +12,7 @@
 #include <linux/list.h>
 #include <dma.h>
 #include <range.h>
+#include <bootargs.h>
 #include <file-list.h>
 
 LIST_HEAD(block_device_list);
@@ -446,14 +447,6 @@ static struct cdev_operations block_ops = {
 	.discard_range = block_op_discard_range,
 };
 
-struct block_device *cdev_get_block_device(const struct cdev *cdev)
-{
-	if (!cdev || cdev->ops != &block_ops)
-		return NULL;
-
-	return cdev->priv;
-}
-
 int blockdevice_register(struct block_device *blk)
 {
 	loff_t size = (loff_t)blk->num_blocks * BLOCKSIZE(blk);
@@ -464,6 +457,7 @@ int blockdevice_register(struct block_device *blk)
 	blk->cdev.dev = blk->dev;
 	blk->cdev.ops = &block_ops;
 	blk->cdev.priv = blk;
+	blk->cdev.flags |= DEVFS_IS_BLOCK_DEV;
 	blk->rdbufsize = BUFSIZE >> blk->blockbits;
 
 	INIT_LIST_HEAD(&blk->buffered_blocks);
@@ -589,3 +583,29 @@ const char *blk_type_str(enum blk_type type)
 		return "unknown";
 	}
 }
+
+char *cdev_get_linux_rootarg(const struct cdev *partcdev)
+{
+	const struct cdev *cdevm;
+	struct block_device *blk;
+	char *rootarg = NULL;
+
+	if (!partcdev)
+		return NULL;
+
+	cdevm = partcdev->master ?: partcdev;
+	blk = cdev_get_block_device(cdevm);
+	if (!blk)
+		return NULL;
+
+	if (blk->ops->get_rootarg)
+		rootarg = blk->ops->get_rootarg(blk, partcdev);
+	if (!rootarg && partcdev->partuuid[0] != 0)
+		rootarg = basprintf("root=PARTUUID=%s", partcdev->partuuid);
+
+	if (IS_ENABLED(CONFIG_ROOTWAIT_BOOTARG) && blk->rootwait)
+		rootarg = linux_bootargs_append_rootwait(rootarg);
+
+	return rootarg;
+}
+

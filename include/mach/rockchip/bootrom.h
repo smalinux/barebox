@@ -11,16 +11,19 @@
 #include <pbl.h>
 
 struct rockchip_scratch_space {
-	u32 irom[16];
+	u32 iram[16];
 	struct optee_header optee_hdr;
+	/* FDT needs an 8 byte alignment */
+	u8 fdt[CONFIG_ARCH_ROCKCHIP_ATF_FDT_SIZE] __aligned(8);
 };
+static_assert(sizeof(struct rockchip_scratch_space) <= CONFIG_SCRATCH_SIZE);
 
 extern struct rockchip_scratch_space *rk_scratch;
 
 static inline void rockchip_store_bootrom_iram(const void *iram)
 {
 	if (rk_scratch)
-		memcpy(rk_scratch, iram, sizeof(struct rockchip_scratch_space));
+		memcpy(rk_scratch->iram, iram, sizeof(rk_scratch->iram));
 }
 
 static inline const struct rockchip_scratch_space *rockchip_scratch_space(void)

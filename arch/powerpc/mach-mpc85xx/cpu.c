@@ -30,7 +30,8 @@
 #include <mach/immap_85xx.h>
 #include <mach/mpc85xx.h>
 
-static void __noreturn mpc85xx_restart_soc(struct restart_handler *rst)
+static void __noreturn mpc85xx_restart_soc(struct restart_handler *rst,
+					   unsigned long flags)
 {
 	void __iomem *regs = (void __iomem *)MPC85xx_GUTS_ADDR;
 
@@ -97,7 +98,7 @@ phys_size_t fsl_get_effective_memsize(void)
 static int fsl_reserve_region(void)
 {
 	request_barebox_region("stack", _text_base - STACK_SIZE,
-			STACK_SIZE);
+			STACK_SIZE, MEMATTRS_RW);
 	return 0;
 }
 coredevice_initcall(fsl_reserve_region);

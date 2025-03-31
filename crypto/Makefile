@@ -17,12 +17,10 @@ obj-pbl-y	+= memneq.o
 
 obj-$(CONFIG_CRYPTO_PBKDF2)	+= pbkdf2.o
 obj-$(CONFIG_CRYPTO_RSA)	+= rsa.o
-obj-$(CONFIG_CRYPTO_KEYSTORE)	+= keystore.o
 obj-$(CONFIG_CRYPTO_BUILTIN_KEYS)      += public-keys.o
 obj-$(CONFIG_CRYPTO_ECC)	+= ecc.o
 obj-$(CONFIG_CRYPTO_ECDSA) 	+= ecdsa.o
 
-obj-$(CONFIG_JWT)		+= jwt.o
 
 extra-$(CONFIG_CRYPTO_BUILTIN_KEYS) += public-keys.h
 
@@ -32,6 +30,17 @@ $(obj)/public-keys.o: $(obj)/public-keys.h
 
 CONFIG_CRYPTO_PUBLIC_KEYS := $(shell echo $(CONFIG_CRYPTO_PUBLIC_KEYS))
 CONFIG_CRYPTO_PUBLIC_KEYS := $(foreach d,$(CONFIG_CRYPTO_PUBLIC_KEYS),"$(d)")
+
+ifdef CONFIG_CRYPTO_BUILTIN_DEVELOPMENT_KEYS
+ifdef CONFIG_CRYPTO_RSA
+CONFIG_CRYPTO_PUBLIC_KEYS += keyring=fit,fit-hint=rsa-devel:$(srctree)/crypto/snakeoil-4096-development.pem
+CONFIG_CRYPTO_PUBLIC_KEYS += keyring=tlv-generic:$(srctree)/crypto/snakeoil-4096-development.pem
+endif
+ifdef CONFIG_CRYPTO_ECDSA
+CONFIG_CRYPTO_PUBLIC_KEYS += keyring=fit,fit-hint=ecdsa-devel:$(srctree)/crypto/snakeoil-ecdsa-development.pem
+CONFIG_CRYPTO_PUBLIC_KEYS += keyring=tlv-generic:$(srctree)/crypto/snakeoil-ecdsa-development.pem
+endif
+endif
 
 filechk_public_keys_dummy = echo
 

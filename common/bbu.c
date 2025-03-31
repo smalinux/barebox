@@ -290,6 +290,14 @@ int barebox_update(struct bbu_data *data, struct bbu_handler *handler)
 }
 
 /*
+ * report whether any update handlers have been registered so far
+ */
+bool bbu_handlers_available(void)
+{
+	return !list_empty(&bbu_image_handlers);
+}
+
+/*
  * print a list of all registered update handlers
  */
 void bbu_handlers_list(void)
@@ -452,15 +460,15 @@ int bbu_std_file_handler(struct bbu_handler *handler,
 
 	ret = protect(fd, data->len, 0, 0);
 	if (ret && (ret != -ENOSYS) && (ret != -ENOTSUPP)) {
-		printf("unprotecting %s failed with %s\n", data->devicefile,
-				strerror(-ret));
+		printf("unprotecting %s failed with %pe\n", data->devicefile,
+				ERR_PTR(ret));
 		goto err_close;
 	}
 
 	ret = erase(fd, data->len, 0, ERASE_TO_WRITE);
 	if (ret && ret != -ENOSYS) {
-		printf("erasing %s failed with %s\n", data->devicefile,
-				strerror(-ret));
+		printf("erasing %s failed with %pe\n", data->devicefile,
+				ERR_PTR(ret));
 		goto err_close;
 	}
 

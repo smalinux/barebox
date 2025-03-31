@@ -14,6 +14,7 @@
 #include <linux/math64.h>
 #include <clock.h>
 #include <sched.h>
+#include <stdlib.h>
 
 static uint64_t time_ns;
 
@@ -34,7 +35,7 @@ static struct clocksource dummy_cs = {
 	.priority = -1,
 };
 
-static struct clocksource *current_clock = &dummy_cs;
+static struct clocksource *current_clock = IN_PROPER ? &dummy_cs : NULL;
 
 static int dummy_csrc_warn(void)
 {
@@ -54,6 +55,9 @@ uint64_t get_time_ns(void)
 	struct clocksource *cs = current_clock;
 	uint64_t cycle_now, cycle_delta;
 	uint64_t ns_offset;
+
+	if (IN_PBL && !cs)
+		panic("No PBL clocksource has been initialized\n");
 
 	/* read clocksource: */
 	cycle_now = cs->read() & cs->mask;
@@ -165,7 +169,7 @@ int is_timeout(uint64_t start_ns, uint64_t time_offset_ns)
 {
 	int ret = is_timeout_non_interruptible(start_ns, time_offset_ns);
 
-	if (time_offset_ns >= 100 * USECOND)
+	if (time_offset_ns >= SCHED_TIMEOUT_MIN)
 		resched();
 
 	return ret;
@@ -203,6 +207,13 @@ void mdelay_non_interruptible(unsigned long msecs)
 }
 EXPORT_SYMBOL(mdelay_non_interruptible);
 
+#if IN_PROPER
+void clocksource_srand(void)
+{
+	srand_xor(current_clock->read() & current_clock->mask);
+}
+#endif
+
 int init_clock(struct clocksource *cs)
 {
 	if (current_clock && cs->priority <= current_clock->priority)
@@ -223,6 +234,8 @@ int init_clock(struct clocksource *cs)
 	 */
 	cs->cycle_last = cs->read() & cs->mask;
 	current_clock = cs;
+
+	srand_xor(cs->cycle_last);
 
 	return 0;
 }
