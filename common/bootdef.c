@@ -13,7 +13,23 @@
 
 static int bootdev_process(struct cdev *cdev, void *entries)
 {
-	return bootentry_create_from_name(entries, cdev->name);
+	struct bootentries *bootdef_entries;
+	struct bootentry *entry;
+	int ret;
+
+	bootdef_entries = bootentries_alloc_list();
+
+	ret = bootentry_create_from_name(bootdef_entries, cdev->name);
+
+	bootentries_for_each_entry(bootdef_entries, entry)
+		entry->overrides.appendroot = BOOTM_OVERRIDE_TRUE;
+
+	/* Now that we have iterated over the bootdef entries only,
+	 * merge it into the sum of all bootentries
+	 */
+	bootentries_merge(entries, bootdef_entries);
+
+	return ret;
 }
 
 static int bootdef_add_entry(struct bootentries *entries, const char *name)

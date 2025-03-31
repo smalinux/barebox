@@ -1211,6 +1211,7 @@ config BOOT_DEFAULTS
 	bool "default boot targets"
 	select BOOT
 	select CDEV_ALIAS
+	select BOOT_OVERRIDE
 	default BLSPEC && OFDEVICE
 	help
 	  Say y here to enable a number of default boot targets that
