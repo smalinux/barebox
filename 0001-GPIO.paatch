@@ -1,0 +1,295 @@
+From 1b33009bf95bba62d4045a1a17a0322115395a49 Mon Sep 17 00:00:00 2001
+From: Sohaib Mohamed <sohaib.amhmd@gmail.com>
+Date: Fri, 29 Aug 2025 08:23:35 +0200
+Subject: [PATCH] GPIO
+
+Signed-off-by: Sohaib Mohamed <sohaib.amhmd@gmail.com>
+---
+ arch/arm/cpu/dtb.c                          |  2 ++
+ arch/arm/mach-omap/am33xx_generic.c         |  2 ++
+ arch/arm/mach-omap/omap_generic.c           |  3 ++-
+ common/startup.c                            |  3 ++-
+ drivers/base/driver.c                       |  8 +++++++-
+ drivers/base/platform.c                     |  1 +
+ drivers/gpio/gpio-omap.c                    | 10 ++++++++++
+ drivers/watchdog/omap_wdt.c                 |  6 ++++--
+ dts/src/arm/ti/omap/am335x-bone-common.dtsi | 15 ++++++++++-----
+ dts/src/arm/ti/omap/am33xx-l4.dtsi          |  4 ++++
+ include/mach/omap/am33xx-silicon.h          |  1 +
+ 11 files changed, 45 insertions(+), 10 deletions(-)
+
+diff --git a/arch/arm/cpu/dtb.c b/arch/arm/cpu/dtb.c
+index e84d317661..ff365cd81b 100644
+--- a/arch/arm/cpu/dtb.c
++++ b/arch/arm/cpu/dtb.c
+@@ -24,7 +24,9 @@ static int of_arm_init(void)
+ 	}
+ 
+ 	pr_debug("using boarddata provided DTB\n");
++	pr_err("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx using boarddata provided DTB\n");
+ 
++  // SMA: X
+ 	return barebox_register_fdt(fdt);
+ }
+ core_initcall(of_arm_init);
+diff --git a/arch/arm/mach-omap/am33xx_generic.c b/arch/arm/mach-omap/am33xx_generic.c
+index 007daccdfb..20a3532ac4 100644
+--- a/arch/arm/mach-omap/am33xx_generic.c
++++ b/arch/arm/mach-omap/am33xx_generic.c
+@@ -227,6 +227,7 @@ const struct gpmc_config am33xx_nand_cfg = {
+ 	.size = GPMC_SIZE_16M,
+ };
+ 
++// SMA X: include/mach/omap/am33xx-silicon.h
+ static int am33xx_gpio_init(void)
+ {
+ 	add_generic_device("omap-gpio", 0, NULL, AM33XX_GPIO0_BASE,
+@@ -254,6 +255,7 @@ int am33xx_init(void)
+ 	return am33xx_bootsource();
+ }
+ 
++// SMA X: omap_init()
+ int am33xx_devices_init(void)
+ {
+ 	am33xx_gpio_init();
+diff --git a/arch/arm/mach-omap/omap_generic.c b/arch/arm/mach-omap/omap_generic.c
+index 112c806216..607c76c6d1 100644
+--- a/arch/arm/mach-omap/omap_generic.c
++++ b/arch/arm/mach-omap/omap_generic.c
+@@ -204,6 +204,7 @@ static int omap_soc_from_dt(void)
+ 	return 0;
+ }
+ 
++// SMA X
+ static int omap_init(void)
+ {
+ 	int ret;
+@@ -233,7 +234,7 @@ static int omap_init(void)
+ 	else if (cpu_is_omap4())
+ 		ret = omap4_devices_init();
+ 	else if (cpu_is_am33xx())
+-		ret = am33xx_devices_init();
++		ret = am33xx_devices_init(); // SMA X
+ 	else
+ 		return -EINVAL;
+ 
+diff --git a/common/startup.c b/common/startup.c
+index 725158d857..0961c92c37 100644
+--- a/common/startup.c
++++ b/common/startup.c
+@@ -8,6 +8,7 @@
+  * Marius Groeger <mgroeger@sysgo.de>
+  */
+ 
++#include "printf.h"
+ #ifdef CONFIG_DEBUG_INITCALLS
+ #define DEBUG
+ #endif
+@@ -383,8 +384,8 @@ void __noreturn start_barebox(void)
+ 	initcall_t *initcall;
+ 	int result;
+ 
++  dump_stack();
+ 	do_ctors();
+-
+ 	for (initcall = __barebox_initcalls_start;
+ 			initcall < __barebox_initcalls_end; initcall++) {
+ 		pr_debug("initcall-> %pS\n", *initcall);
+diff --git a/drivers/base/driver.c b/drivers/base/driver.c
+index edba037fa2..3792d3f8f8 100644
+--- a/drivers/base/driver.c
++++ b/drivers/base/driver.c
+@@ -217,6 +217,7 @@ void device_detect_all(void)
+ 		device_detect(dev);
+ }
+ 
++// SMA X
+ static int match(struct driver *drv, struct device *dev)
+ {
+ 	int ret;
+@@ -242,6 +243,8 @@ int register_device(struct device *new_device)
+ {
+ 	struct driver *drv;
+ 
++  //dump_stack();
++  // SMA: X (important point)
+ 	if (new_device->id == DEVICE_ID_DYNAMIC) {
+ 		new_device->id = get_free_deviceid(new_device->name);
+ 	} else {
+@@ -431,8 +434,10 @@ int register_driver(struct driver *drv)
+ 	list_add_tail(&drv->list, &driver_list);
+ 	list_add_tail(&drv->bus_list, &drv->bus->driver_list);
+ 
+-	bus_for_each_device(drv->bus, dev)
++	bus_for_each_device(drv->bus, dev){
++    // SMA X
+ 		match(drv, dev);
++  }
+ 
+ 	return 0;
+ }
+@@ -820,6 +825,7 @@ struct device *device_find_child(struct device *parent, void *data,
+ 		return NULL;
+ 
+ 	list_for_each_entry(child, &parent->children, sibling) {
++    // SMA X
+ 		if (match(child, data))
+ 			return child;
+ 	}
+diff --git a/drivers/base/platform.c b/drivers/base/platform.c
+index ac7c473c8c..72d524ae72 100644
+--- a/drivers/base/platform.c
++++ b/drivers/base/platform.c
+@@ -22,6 +22,7 @@ static int platform_probe(struct device *dev)
+ 	return dev->driver->probe(dev);
+ }
+ 
++// SMA X
+ int platform_driver_register(struct driver *drv)
+ {
+ 	drv->bus = &platform_bus;
+diff --git a/drivers/gpio/gpio-omap.c b/drivers/gpio/gpio-omap.c
+index 3fcb7387e3..bfca4ceb0a 100644
+--- a/drivers/gpio/gpio-omap.c
++++ b/drivers/gpio/gpio-omap.c
+@@ -121,6 +121,9 @@ static int omap_gpio_probe(struct device *dev)
+ 	struct omap_gpio_chip *omapgpio;
+ 	struct omap_gpio_drvdata *drvdata = NULL;
+ 
++  //dev_err(dev, "Start ................\n");
++  ////dump_stack();
++  //dev_err(dev, "End ................\n");
+ 	dev_get_drvdata(dev, (const void **)&drvdata);
+ 
+ 	omapgpio = xzalloc(sizeof(*omapgpio));
+@@ -170,3 +173,10 @@ static struct driver omap_gpio_driver = {
+ };
+ 
+ coredevice_platform_driver(omap_gpio_driver);
++/*
++static int omap_gpio_driver_register(void)
++{
++    return platform_driver_register(&omap_gpio_driver);
++}
++coredevice_initcall(omap_gpio_driver_register);
++*/
+diff --git a/drivers/watchdog/omap_wdt.c b/drivers/watchdog/omap_wdt.c
+index 0ebc1172aa..0734ea0058 100644
+--- a/drivers/watchdog/omap_wdt.c
++++ b/drivers/watchdog/omap_wdt.c
+@@ -57,7 +57,7 @@
+ 
+ struct omap_wdt_dev {
+ 	struct watchdog wdog;
+-	void __iomem    *base;
++	void __iomem    *base; // NOTE: remove __iomem to get warning from Sparse
+ 	int		wdt_trgr_pattern;
+ 	unsigned	timeout;
+ };
+@@ -167,7 +167,9 @@ static int omap_wdt_probe(struct device *dev)
+ 		ret = PTR_ERR(iores);
+ 		goto error;
+ 	}
+-	wdev->base = IOMEM(iores->start);
++	//wdev->base = IOMEM(iores->start);
++	wdev->base = (void*)iores->start;
++	dev_info(dev, "===> 0x%08x\n", (unsigned int)wdev->base);
+ 
+ 	wdev->timeout = TIMER_MARGIN_DEFAULT;
+ 
+diff --git a/dts/src/arm/ti/omap/am335x-bone-common.dtsi b/dts/src/arm/ti/omap/am335x-bone-common.dtsi
+index c400b7b70d..68fd784965 100644
+--- a/dts/src/arm/ti/omap/am335x-bone-common.dtsi
++++ b/dts/src/arm/ti/omap/am335x-bone-common.dtsi
+@@ -26,30 +26,35 @@ leds {
+ 		compatible = "gpio-leds";
+ 
+ 		led2 {
++      // Basic info to make heartbeat
+ 			label = "beaglebone:green:heartbeat";
+-			gpios = <&gpio1 21 GPIO_ACTIVE_HIGH>;
++			gpios = <&gpio2 2 GPIO_ACTIVE_HIGH>;
+ 			linux,default-trigger = "heartbeat";
+-			default-state = "off";
++			default-state = "on";
++      max-brightness = <1>;
++      //
++      //max-brightness = "0";
++      //active-high = <0x0>;
+ 		};
+ 
+ 		led3 {
+ 			label = "beaglebone:green:mmc0";
+ 			gpios = <&gpio1 22 GPIO_ACTIVE_HIGH>;
+-			linux,default-trigger = "mmc0";
++			linux,default-trigger = "none";
+ 			default-state = "off";
+ 		};
+ 
+ 		led4 {
+ 			label = "beaglebone:green:usr2";
+ 			gpios = <&gpio1 23 GPIO_ACTIVE_HIGH>;
+-			linux,default-trigger = "cpu0";
++			linux,default-trigger = "none";
+ 			default-state = "off";
+ 		};
+ 
+ 		led5 {
+ 			label = "beaglebone:green:usr3";
+ 			gpios = <&gpio1 24 GPIO_ACTIVE_HIGH>;
+-			linux,default-trigger = "mmc1";
++			linux,default-trigger = "none";
+ 			default-state = "off";
+ 		};
+ 	};
+diff --git a/dts/src/arm/ti/omap/am33xx-l4.dtsi b/dts/src/arm/ti/omap/am33xx-l4.dtsi
+index d6a143abae..ee38392d68 100644
+--- a/dts/src/arm/ti/omap/am33xx-l4.dtsi
++++ b/dts/src/arm/ti/omap/am33xx-l4.dtsi
+@@ -157,6 +157,7 @@ SYSC_OMAP2_SOFTRESET |
+ 			ranges = <0x0 0x7000 0x1000>;
+ 
+ 			gpio0: gpio@0 {
++        /* SMA: match gpio0 */
+ 				compatible = "ti,omap4-gpio";
+ 				gpio-ranges =	<&am33xx_pinmux  0  82 8>,
+ 						<&am33xx_pinmux  8  52 4>,
+@@ -1456,6 +1457,7 @@ SYSC_OMAP2_SOFTRESET |
+ 			ranges = <0x0 0x4c000 0x1000>;
+ 
+ 			gpio1: gpio@0 {
++        /* SMA: match gpio1 */
+ 				compatible = "ti,omap4-gpio";
+ 				gpio-ranges =   <&am33xx_pinmux  0  0  8>,
+ 						<&am33xx_pinmux  8 90  4>,
+@@ -1859,6 +1861,7 @@ SYSC_OMAP2_SOFTRESET |
+ 			ranges = <0x0 0xac000 0x1000>;
+ 
+ 			gpio2: gpio@0 {
++        /* SMA: match gpio2 */
+ 				compatible = "ti,omap4-gpio";
+                                 gpio-ranges =	<&am33xx_pinmux  0 34 18>,
+ 						<&am33xx_pinmux 18 77  4>,
+@@ -1895,6 +1898,7 @@ SYSC_OMAP2_SOFTRESET |
+ 			ranges = <0x0 0xae000 0x1000>;
+ 
+ 			gpio3: gpio@0 {
++        /* SMA: match gpio3 */
+ 				compatible = "ti,omap4-gpio";
+ 				gpio-ranges =	<&am33xx_pinmux  0  66 5>,
+ 						<&am33xx_pinmux  5  98 2>,
+diff --git a/include/mach/omap/am33xx-silicon.h b/include/mach/omap/am33xx-silicon.h
+index 61025dcd73..534490b328 100644
+--- a/include/mach/omap/am33xx-silicon.h
++++ b/include/mach/omap/am33xx-silicon.h
+@@ -31,6 +31,7 @@
+ #define AM33XX_UART1_BASE		(AM33XX_L4_PER_BASE + 0x22000)
+ #define AM33XX_UART2_BASE		(AM33XX_L4_PER_BASE + 0x24000)
+ 
++/* SMA X --------------- */
+ /* GPIO */
+ #define AM33XX_GPIO0_BASE		(AM33XX_L4_WKUP_BASE + 0x207000 + 0x100)
+ #define AM33XX_GPIO1_BASE		(AM33XX_L4_PER_BASE + 0x4C000 + 0x100)
+-- 
+2.43.0
+
