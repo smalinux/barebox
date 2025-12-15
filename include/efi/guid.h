@@ -41,6 +41,7 @@ extern const efi_guid_t efi_load_file2_protocol_guid;
 extern const efi_guid_t efi_device_path_utilities_protocol_guid;
 extern const efi_guid_t efi_linux_initrd_media_guid;
 extern const efi_guid_t efi_smbios_guid;
+extern const efi_guid_t efi_smbios3_guid;
 extern const efi_guid_t efi_gop_guid;
 extern const efi_guid_t efi_snp_guid;
 extern const efi_guid_t efi_text_input_ex_guid;
