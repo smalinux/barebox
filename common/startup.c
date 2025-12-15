@@ -40,7 +40,7 @@
 #include <watchdog.h>
 #include <glob.h>
 #include <net.h>
-#include <efi/efi-mode.h>
+#include <efi/mode.h>
 #include <bselftest.h>
 #include <pbl/handoff-data.h>
 #include <libfile.h>
@@ -62,9 +62,9 @@ static int mount_root(void)
 	mkdir("/mnt", 0);
 	devfs_init();
 
-	if (IS_ENABLED(CONFIG_FS_EFIVARFS) && efi_is_payload()) {
+	if (IS_ENABLED(CONFIG_FS_EFIVARFS)) {
 		mkdir("/efivars", 0);
-		mount("none", "efivarfs", "/efivars", NULL);
+		automount_add("/efivars", "mount -t efivarfs none /efivars");
 	}
 
 	if (IS_ENABLED(CONFIG_FS_PSTORE)) {
