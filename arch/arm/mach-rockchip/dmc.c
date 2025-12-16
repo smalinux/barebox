@@ -16,11 +16,15 @@
 #include <mach/rockchip/dmc.h>
 #include <mach/rockchip/atf.h>
 #include <mach/rockchip/rk3399-regs.h>
+#include <mach/rockchip/rk3562-regs.h>
 #include <mach/rockchip/rk3568-regs.h>
 #include <mach/rockchip/rk3576-regs.h>
 
 #define RK3399_PMUGRF_OS_REG2		0x308
 #define RK3399_PMUGRF_OS_REG3		0x30C
+
+#define RK3562_PMUGRF_OS_REG2           0x208
+#define RK3562_PMUGRF_OS_REG3           0x20c
 
 #define RK3568_PMUGRF_OS_REG2           0x208
 #define RK3568_PMUGRF_OS_REG3           0x20c
@@ -29,6 +33,7 @@
 #define RK3576_PMUGRF_OS_REG3           0x20c
 
 #define RK3399_INT_REG_START		0xf0000000
+#define RK3562_INT_REG_START		RK3399_INT_REG_START
 #define RK3568_INT_REG_START		RK3399_INT_REG_START
 #define RK3576_INT_REG_START		0x10000000
 #define RK3588_INT_REG_START		RK3399_INT_REG_START
@@ -149,6 +154,23 @@ resource_size_t rk3399_ram0_size(void)
 
 	size = rockchip_sdram_size(sys_reg2, sys_reg3);
 	size = min_t(resource_size_t, RK3399_INT_REG_START, size);
+
+	pr_debug("%s() = %llu\n", __func__, (u64)size);
+
+	return size;
+}
+
+resource_size_t rk3562_ram0_size(void)
+{
+	void __iomem *pmugrf = IOMEM(RK3562_PMUGRF_BASE);
+	u32 sys_reg2, sys_reg3;
+	resource_size_t size;
+
+	sys_reg2 = readl(pmugrf + RK3562_PMUGRF_OS_REG2);
+	sys_reg3 = readl(pmugrf + RK3562_PMUGRF_OS_REG3);
+
+	size = rockchip_sdram_size(sys_reg2, sys_reg3);
+	size = min_t(resource_size_t, RK3562_INT_REG_START, size);
 
 	pr_debug("%s() = %llu\n", __func__, (u64)size);
 
