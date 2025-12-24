@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2021 Rockchip Electronics Co., Ltd.
+ *
+ */
+
+/dts-v1/;
+
+#include <arm64/rockchip/rk3562-kickpi-k3.dts>
+#include "rk3562.dtsi"
+
+/ {
+	model = "Rockchip RK3562 kickpi k3";
+
+	/* Hardcode until we have DMC driver support */
+	memory@a00000 {
+		device_type = "memory";
+		reg = <0x0 0x00a00000 0x0 0x7f600000>;
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
