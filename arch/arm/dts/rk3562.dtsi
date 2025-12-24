@@ -18,5 +18,7 @@
 		pwm13 = &pwm13;
 		pwm14 = &pwm14;
 		pwm15 = &pwm15;
+		mmc0 = &sdhci;
+		mmc1 = &sdmmc0;
 	};
 };
