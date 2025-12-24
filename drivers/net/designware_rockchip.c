@@ -22,6 +22,7 @@ struct rk_gmac_ops {
 	void (*set_rgmii_speed)(struct eqos *eqos, int speed);
 	void (*integrated_phy_powerup)(struct eqos *eqos);
 	const u32 *regs;
+	void (*set_clock_selection)(struct eqos *eqos, bool input, bool enable);
 };
 
 struct eqos_rk_gmac {
@@ -68,6 +69,197 @@ static inline struct eqos_rk_gmac *to_rk_gmac(struct eqos *eqos)
 
 #define GRF_BIT(nr)	(BIT(nr) | BIT((nr) + 16))
 #define GRF_CLR_BIT(nr)	(BIT((nr) + 16))
+
+
+/* sys_grf */
+#define RK3562_GRF_SYS_SOC_CON0			0X0400
+#define RK3562_GRF_SYS_SOC_CON1			0X0404
+
+#define RK3562_GMAC0_CLK_RMII_MODE		GRF_BIT(5)
+#define RK3562_GMAC0_CLK_RGMII_MODE		GRF_CLR_BIT(5)
+
+#define RK3562_GMAC0_CLK_RMII_GATE		GRF_BIT(6)
+#define RK3562_GMAC0_CLK_RMII_NOGATE		GRF_CLR_BIT(6)
+
+#define RK3562_GMAC0_CLK_RMII_DIV2		GRF_BIT(7)
+#define RK3562_GMAC0_CLK_RMII_DIV20		GRF_CLR_BIT(7)
+
+#define RK3562_GMAC0_CLK_RGMII_DIV1		\
+				(GRF_CLR_BIT(7) | GRF_CLR_BIT(8))
+#define RK3562_GMAC0_CLK_RGMII_DIV5		\
+				(GRF_BIT(7) | GRF_BIT(8))
+#define RK3562_GMAC0_CLK_RGMII_DIV50		\
+				(GRF_CLR_BIT(7) | GRF_BIT(8))
+
+#define RK3562_GMAC0_CLK_RMII_DIV2		GRF_BIT(7)
+#define RK3562_GMAC0_CLK_RMII_DIV20		GRF_CLR_BIT(7)
+
+#define RK3562_GMAC0_CLK_SELET_CRU		GRF_CLR_BIT(9)
+#define RK3562_GMAC0_CLK_SELET_IO		GRF_BIT(9)
+
+#define RK3562_GMAC1_CLK_RMII_GATE		GRF_BIT(12)
+#define RK3562_GMAC1_CLK_RMII_NOGATE		GRF_CLR_BIT(12)
+
+#define RK3562_GMAC1_CLK_RMII_DIV2		GRF_BIT(13)
+#define RK3562_GMAC1_CLK_RMII_DIV20		GRF_CLR_BIT(13)
+
+#define RK3562_GMAC1_RMII_SPEED100		GRF_BIT(11)
+#define RK3562_GMAC1_RMII_SPEED10		GRF_CLR_BIT(11)
+
+#define RK3562_GMAC1_CLK_SELET_CRU		GRF_CLR_BIT(15)
+#define RK3562_GMAC1_CLK_SELET_IO		GRF_BIT(15)
+
+/* ioc_grf */
+#define RK3562_GRF_IOC_GMAC_IOFUNC0_CON0	0X10400
+#define RK3562_GRF_IOC_GMAC_IOFUNC0_CON1	0X10404
+#define RK3562_GRF_IOC_GMAC_IOFUNC1_CON0	0X00400
+#define RK3562_GRF_IOC_GMAC_IOFUNC1_CON1	0X00404
+
+#define RK3562_GMAC_RXCLK_DLY_ENABLE		GRF_BIT(1)
+#define RK3562_GMAC_RXCLK_DLY_DISABLE		GRF_CLR_BIT(1)
+#define RK3562_GMAC_TXCLK_DLY_ENABLE		GRF_BIT(0)
+#define RK3562_GMAC_TXCLK_DLY_DISABLE		GRF_CLR_BIT(0)
+
+#define RK3562_GMAC_CLK_RX_DL_CFG(val)		HIWORD_UPDATE(val, 0xFF, 8)
+#define RK3562_GMAC_CLK_TX_DL_CFG(val)		HIWORD_UPDATE(val, 0xFF, 0)
+
+#define RK3562_GMAC0_IO_EXTCLK_SELET_CRU	GRF_CLR_BIT(2)
+#define RK3562_GMAC0_IO_EXTCLK_SELET_IO		GRF_BIT(2)
+
+#define RK3562_GMAC1_IO_EXTCLK_SELET_CRU	GRF_CLR_BIT(3)
+#define RK3562_GMAC1_IO_EXTCLK_SELET_IO		GRF_BIT(3)
+
+#define DELAY_ENABLE(soc, tx, rx) \
+	((((tx) >= 0) ? soc##_GMAC_TXCLK_DLY_ENABLE : soc##_GMAC_TXCLK_DLY_DISABLE) | \
+	 (((rx) >= 0) ? soc##_GMAC_RXCLK_DLY_ENABLE : soc##_GMAC_RXCLK_DLY_DISABLE))
+
+#define DELAY_VALUE(soc, tx, rx) \
+	((((tx) >= 0) ? soc##_GMAC_CLK_TX_DL_CFG(tx) : 0) | \
+	 (((rx) >= 0) ? soc##_GMAC_CLK_RX_DL_CFG(rx) : 0))
+
+#define GMAC_RGMII_CLK_DIV_BY_ID(soc, id, div) \
+		(soc##_GMAC##id##_CLK_RGMII_DIV##div)
+#define GMAC_RMII_CLK_DIV_BY_ID(soc, id, div) \
+		(soc##_GMAC##id##_CLK_RMII_DIV##div)
+
+static void rk3562_set_to_rgmii(struct eqos *eqos,
+				int tx_delay, int rx_delay)
+{
+	struct eqos_rk_gmac *priv = to_rk_gmac(eqos);
+	struct device *dev = priv->dev;
+
+	if (IS_ERR(priv->grf)) {
+		dev_err(dev, "Missing rockchip,grf or rockchip,grf property\n");
+		return;
+	}
+
+	if (priv->bus_id > 0)
+		return;
+
+	regmap_write(priv->grf, RK3562_GRF_SYS_SOC_CON0,
+		     RK3562_GMAC0_CLK_RGMII_MODE);
+
+	regmap_write(priv->grf, RK3562_GRF_IOC_GMAC_IOFUNC0_CON1,
+		     DELAY_ENABLE(RK3562, tx_delay, rx_delay));
+	regmap_write(priv->grf, RK3562_GRF_IOC_GMAC_IOFUNC0_CON0,
+		     DELAY_VALUE(RK3562, tx_delay, rx_delay));
+
+	regmap_write(priv->grf, RK3562_GRF_IOC_GMAC_IOFUNC1_CON1,
+		     DELAY_ENABLE(RK3562, tx_delay, rx_delay));
+	regmap_write(priv->grf, RK3562_GRF_IOC_GMAC_IOFUNC1_CON0,
+		     DELAY_VALUE(RK3562, tx_delay, rx_delay));
+}
+
+static void rk3562_set_to_rmii(struct eqos *eqos)
+{
+	struct eqos_rk_gmac *priv = to_rk_gmac(eqos);
+	struct device *dev = priv->dev;
+
+	if (IS_ERR(priv->grf)) {
+		dev_err(dev, "%s: Missing rockchip,grf property\n", __func__);
+		return;
+	}
+
+	if (!priv->bus_id)
+		regmap_write(priv->grf, RK3562_GRF_SYS_SOC_CON0,
+			     RK3562_GMAC0_CLK_RMII_MODE);
+}
+
+static void rk3562_set_gmac_speed(struct eqos *eqos, int speed)
+{
+	struct eqos_rk_gmac *priv = to_rk_gmac(eqos);
+	struct device *dev = priv->dev;
+	unsigned long rate;
+	int ret;
+
+	switch (speed) {
+	case SPEED_10:
+		rate = 2500000;
+		break;
+	case SPEED_100:
+		rate = 25000000;
+		break;
+	case SPEED_1000:
+		rate = 125000000;
+		break;
+	default:
+		dev_err(dev, "unknown speed value for GMAC speed=%d", speed);
+		return;
+	}
+
+	ret = clk_set_rate(priv->clks[CLK_MAC_SPEED].clk, rate);
+	if (ret)
+		dev_err(dev, "%s: set clk_mac_speed rate %ld failed %d\n",
+			__func__, rate, ret);
+}
+
+static void rk3562_set_clock_selection(struct eqos *eqos, bool input,
+					bool enable)
+{
+	struct eqos_rk_gmac *priv = to_rk_gmac(eqos);
+	struct device *dev = priv->dev;
+	unsigned int value;
+
+	if (IS_ERR(priv->grf) || IS_ERR(priv->grf)) {
+		dev_err(dev, "Missing rockchip,grf or rockchip,grf property\n");
+		return;
+	}
+
+	if (!priv->bus_id) {
+		value = input ? RK3562_GMAC0_CLK_SELET_IO :
+				RK3562_GMAC0_CLK_SELET_CRU;
+		value |= enable ? RK3562_GMAC0_CLK_RMII_NOGATE :
+				  RK3562_GMAC0_CLK_RMII_GATE;
+		regmap_write(priv->grf, RK3562_GRF_SYS_SOC_CON0, value);
+
+		value = input ? RK3562_GMAC0_IO_EXTCLK_SELET_IO :
+				RK3562_GMAC0_IO_EXTCLK_SELET_CRU;
+		regmap_write(priv->grf, RK3562_GRF_IOC_GMAC_IOFUNC0_CON1, value);
+		regmap_write(priv->grf, RK3562_GRF_IOC_GMAC_IOFUNC1_CON1, value);
+	} else {
+		value = input ? RK3562_GMAC1_CLK_SELET_IO :
+				RK3562_GMAC1_CLK_SELET_CRU;
+		value |= enable ? RK3562_GMAC1_CLK_RMII_NOGATE :
+				 RK3562_GMAC1_CLK_RMII_GATE;
+		regmap_write(priv->grf, RK3562_GRF_SYS_SOC_CON1, value);
+
+		value = input ? RK3562_GMAC1_IO_EXTCLK_SELET_IO :
+				RK3562_GMAC1_IO_EXTCLK_SELET_CRU;
+		regmap_write(priv->grf, RK3562_GRF_IOC_GMAC_IOFUNC1_CON1, value);
+	}
+}
+
+static const struct rk_gmac_ops rk3562_ops = {
+	.set_to_rgmii = rk3562_set_to_rgmii,
+	.set_to_rmii = rk3562_set_to_rmii,
+	.set_rgmii_speed = rk3562_set_gmac_speed,
+	.regs = (u32 []) {
+		0xffa80000, /* gmac0 */
+		0xffb30000, /* gmac1 */
+		0x0, /* sentinel */
+	},
+	.set_clock_selection = rk3562_set_clock_selection,
+};
 
 #define RK3568_GRF_GMAC0_CON0		0x0380
 #define RK3568_GRF_GMAC0_CON1		0x0384
@@ -186,6 +378,9 @@ static int rk_gmac_powerup(struct eqos *eqos)
 {
 	struct eqos_rk_gmac *priv = to_rk_gmac(eqos);
 	struct device *dev = priv->dev;
+
+	if (priv->ops->set_clock_selection)
+		priv->ops->set_clock_selection(eqos, priv->clock_input, true);
 
 	/*rmii or rgmii*/
 	switch (eqos->interface) {
@@ -313,9 +508,14 @@ static int rk_gmac_probe(struct device *dev)
 
 static __maybe_unused struct of_device_id rk_gmac_compatible[] = {
 	{
+		.compatible = "rockchip,rk3562-gmac",
+		.data = &rk3562_ops,
+	},
+	{
 		.compatible = "rockchip,rk3568-gmac",
 		.data = &rk3568_ops,
-	}, {
+	},
+	{
 		/* sentinel */
 	}
 };
