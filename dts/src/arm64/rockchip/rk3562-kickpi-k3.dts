@@ -1,0 +1,781 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2025 Sohaib Mohamed
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
+#include <dt-bindings/pinctrl/rockchip.h>
+#include "rk3562.dtsi"
+
+/ {
+	model = "Rockchip RK3562 kickpi k3";
+	compatible = "rockchip,rk3562-kickpi-k3", "rockchip,rk3562";
+
+	chosen: chosen {
+		bootargs = "console=ttyS0,1500000n8 rw";
+	};
+
+	// Is this compatible exist for linux kernel driver?
+	// Is this device contain really 5 buttons?
+	// Add code styple correct?
+	// TODO?
+	// all comments deleted?
+	//
+
+	//>> rk3562-kickpi-pcie-m2.dtsi
+	vcc3v3_pcie20: vcc3v3-pcie20 {
+			compatible = "regulator-fixed";
+			regulator-name = "vcc3v3_pcie20";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			enable-active-high;
+			regulator-boot-on;
+			regulator-always-on;
+			gpios = <&gpio3 RK_PC5 GPIO_ACTIVE_HIGH>;
+			startup-delay-us = <5000>;
+			vin-supply = <&dc_12v>;
+	};
+
+
+	//>> rk3562-kickpi-usb.dtsi
+        vcc5v0_usb: vcc5v0-usb {
+                compatible = "regulator-fixed";
+                regulator-name = "vcc5v0_usb";
+                regulator-always-on;
+                regulator-boot-on;
+                regulator-min-microvolt = <5000000>;
+                regulator-max-microvolt = <5000000>;
+                vin-supply = <&dc_12v>;
+        };
+/*
+	//>> rk3562-kickpi-usb.dtsi
+        vcc5v0_usb_host: vcc5v0-usb-host {
+                compatible = "regulator-fixed";
+                regulator-name = "vcc5v0_usb_host";
+                regulator-boot-on;
+                regulator-always-on;
+                regulator-min-microvolt = <5000000>;
+                regulator-max-microvolt = <5000000>;
+                enable-active-high;
+                gpio = <&gpio3 RK_PC6 GPIO_ACTIVE_HIGH>;
+                vin-supply = <&vcc5v0_usb>;
+                pinctrl-names = "default";
+                pinctrl-0 = <&usb_host_pwren>;
+        };
+*/
+		//>> rk3562-kickpi-usb.dtsi
+        vcc5v0_usb_otg: vcc5v0-usb-otg {
+                compatible = "regulator-fixed";
+                regulator-name = "vcc5v0_usb_otg";
+                regulator-min-microvolt = <5000000>;
+                regulator-max-microvolt = <5000000>;
+                enable-active-high;
+                gpio = <&gpio3 RK_PC6 GPIO_ACTIVE_HIGH>;
+                vin-supply = <&vcc5v0_usb>;
+                pinctrl-names = "default";
+                pinctrl-0 = <&usb_otg_pwren>;
+        };
+
+	////>>rk3562-kickpi-wifibt.dtsi
+	//sdio_pwrseq: sdio-pwrseq {
+	//	compatible = "mmc-pwrseq-simple";
+	//	clocks = <&rk809 1>;
+	//	clock-names = "ext_clock";
+	//	pinctrl-names = "default";
+	//	pinctrl-0 = <&wifi_enable_h>;
+
+	//	/*
+	//	 * On the module itself this is one of these (depending
+	//	 * on the actual card populated):
+	//	 * - SDIO_RESET_L_WL_REG_ON
+	//	 * - PDN (power down when low)
+	//	 */
+	//	post-power-on-delay-ms = <200>;
+	//};
+
+	////>>rk3562-kickpi-wifibt.dtsi
+	//wireless_wlan: wireless-wlan {
+	//	compatible = "wlan-platdata";
+	//	rockchip,grf = <&sys_grf>;
+	//	wifi_chip_type = "rtl8822cs";
+	//	WIFI,poweren_gpio = <&gpio0 RK_PB3 GPIO_ACTIVE_HIGH>;
+	//	pinctrl-names = "default";
+	//	pinctrl-0 = <&wifi_host_wake_irq>;
+	//	WIFI,host_wake_irq = <&gpio0 RK_PB4 GPIO_ACTIVE_HIGH>;
+	//	status = "okay";
+	//};
+
+	////>>rk3562-kickpi-wifibt.dtsi
+	//wireless_bluetooth: wireless-bluetooth {
+	//	compatible = "bluetooth-platdata";
+	//	clocks = <&rk809 1>;
+	//	clock-names = "ext_clock";
+	//	uart_rts_gpios = <&gpio3 RK_PD3 GPIO_ACTIVE_LOW>;
+	//	pinctrl-names = "default", "rts_gpio";
+	//	pinctrl-0 = <&uart7m0_rtsn>;
+	//	pinctrl-1 = <&uart7_gpios>;
+	//	BT,power_gpio    = <&gpio0 RK_PC5 GPIO_ACTIVE_HIGH>;
+	//	BT,wake_gpio     = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;
+	//	BT,wake_host_irq = <&gpio0 RK_PC7 GPIO_ACTIVE_HIGH>;
+	//	status = "okay";
+	//};
+
+
+	//>> rk3562-kickpi-k3.dtsi
+	dc_12v: dc-12v {
+		compatible = "regulator-fixed";
+		regulator-name = "dc_12v";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <12000000>;
+		regulator-max-microvolt = <12000000>;
+	};
+
+	////>> rk3562-kickpi-k3.dtsi
+	//rk809_sound: rk809-sound {
+	//	status = "okay";
+	//	compatible = "rockchip,multicodecs-card";
+	//	rockchip,card-name = "rockchip-rk809";
+	//	hp-det-gpio = <&gpio4 RK_PB1 GPIO_ACTIVE_HIGH>;
+	//	rockchip,format = "i2s";
+	//	rockchip,mclk-fs = <256>;
+	//	rockchip,cpu = <&sai0>;
+	//	rockchip,codec = <&rk809_codec>;
+	//	pinctrl-names = "default";
+	//	pinctrl-0 = <&hp_det>;
+	//};
+
+	//>> rk3562-kickpi-k3.dtsi
+	vcc5v0_sys: vcc5v0-sys {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_sys";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&dc_12v>;
+	};
+
+	//>> rk3562-kickpi-k3.dtsi
+	vcc3v3_clk: vcc3v3-clk {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3_clk";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&vcc5v0_sys>;
+	};
+
+	//>> rk3562-kickpi-k3.dtsi
+	vcc3v3_sys: vcc-sys {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3_sys";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&dc_12v>;
+	};
+
+	//>> rk3562-kickpi-k3.dtsi
+	vcc25_ddr: vcc25-ddr {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc25_ddr";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <2500000>;
+		regulator-max-microvolt = <2500000>;
+		vin-supply = <&vcc3v3_sys>;
+	};
+
+	//>> rk3562-kickpi-k3.dtsi
+	vdd_npu: vdd-npu {
+		compatible = "pwm-regulator";
+		pwms = <&pwm6 0 5000 1>;
+		regulator-name = "vdd_npu";
+		regulator-min-microvolt = <800000>;
+		regulator-max-microvolt = <1100000>;
+		regulator-init-microvolt = <900000>;
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-settling-time-up-us = <250>;
+		pwm-supply = <&vcc5v0_sys>;
+		status = "okay";
+	};
+
+	leds: leds {
+		compatible = "gpio-leds";
+	};
+
+};
+
+////>> rk3562-kickpi-gmac0.dtsi
+//&gmac0 {
+//		/* Use rgmii-rxid mode to disable rx delay inside Soc */
+//		//phy-mode = "rgmii-rxid";
+//		phy-mode = "rgmii";
+//		clock_in_out = "output";
+//
+//		snps,reset-gpio = <&gpio3 RK_PA0 GPIO_ACTIVE_LOW>;
+//		snps,reset-active-low;
+//		/* Reset time is 20ms, 100ms for rtl8211f */
+//		snps,reset-delays-us = <0 20000 100000>;
+//
+//		tx_delay = <0x47>;
+//		rx_delay = <0x40>;
+//
+//		pinctrl-names = "default";
+//		pinctrl-0 = <&rgmiim0_miim
+//					&rgmiim0_tx_bus2
+//					&rgmiim0_rx_bus2
+//					&rgmiim0_rgmii_clk
+//					&rgmiim0_rgmii_bus>;
+//					//&ethm0_pins>;
+//
+//		phy-handle = <&rgmii_phy>;
+//		status = "okay";
+//};
+//
+////>> rk3562-kickpi-gmac0.dtsi
+//&mdio0 {
+//		rgmii_phy: phy@1 {
+//				compatible = "ethernet-phy-ieee802.3-c22";
+//				reg = <0x1>;
+//				//clocks = <&cru CLK_GMAC_ETH_OUT2IO>;
+//				//assigned-clocks = <&cru CLK_GMAC_ETH_OUT2IO>;
+//				//assigned-clock-rates = <25000000>;
+//		};
+//};
+
+////>> rk3562-kickpi-gmac1.dtsi
+//&gmac1 {
+//        phy-mode = "rmii";
+//        clock_in_out = "input";
+//
+//        snps,reset-gpio = <&gpio3 RK_PA1 GPIO_ACTIVE_LOW>;
+//        snps,reset-active-low;
+//        snps,reset-delays-us = <0 20000 100000>;
+//
+//        tx_delay = <0x10>;
+//        rx_delay = <0x2f>;
+//
+//        pinctrl-names="default";
+//        pinctrl-0 = <&rmii_pins>;
+//
+//        phy-handle = <&rgmii_phy1>;
+//
+//        status = "okay";
+//};
+//
+////>> rk3562-kickpi-gmac1.dtsi
+//&mdio1 {
+//        rgmii_phy1: phy@1 {
+//                compatible = "ethernet-phy-ieee802.3-c22";
+//                reg = <0x01>;
+//        };
+//};
+
+//>> rk3562-kickpi-extend-20pin.dtsi
+&i2c5 {
+	status = "okay";
+	pinctrl-names = "default";
+        pinctrl-0 = <&i2c5m0_xfer>;
+};
+
+
+//>> rk3562-kickpi-extend-20pin.dtsi
+&uart4 {
+	status = "okay";
+        pinctrl-names = "default";
+        pinctrl-0 = <&uart4m0_xfer>;
+};
+
+//>> rk3562-kickpi-extend-20pin.dtsi
+&leds {
+	gpio3c0 {
+		gpios = <&gpio3 RK_PC0 GPIO_ACTIVE_HIGH>;
+		default-state = "on";
+	};
+	gpio3c1 {
+		gpios = <&gpio3 RK_PC1 GPIO_ACTIVE_HIGH>;
+		default-state = "on";
+	};
+	gpio0a6 {
+		gpios = <&gpio0 RK_PA6 GPIO_ACTIVE_HIGH>;
+		default-state = "on";
+	};
+	gpio4b6 {
+		gpios = <&gpio4 RK_PB6 GPIO_ACTIVE_HIGH>;
+		default-state = "on";
+	};
+};
+
+//>> rk3562-kickpi-pcie-m2.dtsi
+&combphy {
+        status = "okay";
+};
+
+//>> rk3562-kickpi-pcie-m2.dtsi
+&pcie2x1 {
+        reset-gpios = <&gpio3 RK_PB0 GPIO_ACTIVE_HIGH>;
+        vpcie3v3-supply = <&vcc3v3_pcie20>;
+        status = "okay";
+};
+
+//>> rk3562-kickpi-usb.dtsi
+&u2phy {
+        status = "okay";
+};
+
+//>> rk3562-kickpi-usb.dtsi
+&u2phy_host {
+        status = "okay";
+        phy-supply = <&vcc5v0_usb_otg>;
+};
+
+//>> rk3562-kickpi-usb.dtsi
+&u2phy_otg {
+        status = "okay";
+        //vbus-supply = <&vcc5v0_usb_otg>;
+};
+
+//>> rk3562-kickpi-usb.dtsi
+&usb_host0_ehci {
+        status = "okay";
+};
+
+//>> rk3562-kickpi-usb.dtsi
+&usb_host0_ohci {
+        status = "okay";
+};
+
+//>> rk3562-kickpi-usb.dtsi
+&usbdrd30 {
+        status = "okay";
+};
+
+//>> rk3562-kickpi-usb.dtsi
+&usbdrd_dwc3 {
+        status = "okay";
+        dr_mode = "otg";
+        extcon = <&u2phy>;
+        maximum-speed = "high-speed";
+        phys = <&u2phy_otg>;
+        phy-names = "usb2-phy";
+        snps,dis_u2_susphy_quirk;
+        snps,usb2-lpm-disable;
+};
+
+//>> rk3562-kickpi-usb.dtsi
+&pinctrl {
+        usb {
+/*              usb_host_pwren: usb-host-pwren {
+                        rockchip,pins = <3 RK_PC6 RK_FUNC_GPIO &pcfg_pull_none>;
+                };
+*/
+                usb_otg_pwren: usb-otg-pwren {
+                        rockchip,pins = <3 RK_PC6 RK_FUNC_GPIO &pcfg_pull_none>;
+                };
+
+        };
+};
+
+////>>rk3562-kickpi-wifibt.dtsi
+//&sdmmc1 {
+//        no-sd;
+//        no-mmc;
+//        bus-width = <4>;
+//        disable-wp;
+//        cap-sd-highspeed;
+//        cap-sdio-irq;
+//        keep-power-in-suspend;
+//        mmc-pwrseq = <&sdio_pwrseq>;
+//        non-removable;
+//        pinctrl-names = "default";
+//        pinctrl-0 = <&sdmmc1_bus4 &sdmmc1_cmd &sdmmc1_clk>;
+//        sd-uhs-sdr104;
+//        status = "okay";
+//};
+
+////>>rk3562-kickpi-wifibt.dtsi
+//&uart7 {
+//        status = "okay";
+//        pinctrl-names = "default";
+//        pinctrl-0 = <&uart7m0_xfer &uart7m0_ctsn>;
+//};
+//
+////>>rk3562-kickpi-wifibt.dtsi
+//&pinctrl {
+//	wireless-bluetooth {
+//		uart7_gpios: uart7-gpios {
+//			rockchip,pins = <3 RK_PD3 RK_FUNC_GPIO &pcfg_pull_none>;
+//		};
+//	};
+//
+//	sdio-pwrseq {
+//		wifi_enable_h: wifi-enable-h {
+//			rockchip,pins = <0 RK_PB3 RK_FUNC_GPIO &pcfg_pull_up>;
+//		};
+//	};
+//
+//	wireless-wlan {
+//		wifi_host_wake_irq: wifi-host-wake-irq {
+//			rockchip,pins = <0 RK_PB4 RK_FUNC_GPIO &pcfg_pull_down>;
+//		};
+//	};
+//};
+
+//>> rk3562-kickpi-k3.dtsi
+&leds {
+	work_led: work-led {
+		gpios = <&gpio0 RK_PC0 GPIO_ACTIVE_HIGH>;
+		linux,default-trigger = "heartbeat";
+	};
+	fan: fan {
+		gpios = <&gpio0 RK_PC4 GPIO_ACTIVE_HIGH>;
+		default-state = "on";
+	};
+};
+
+////>> rk3562-kickpi-k3.dtsi
+//&sai0 {
+//        status = "okay";
+//        pinctrl-names = "default";
+//        pinctrl-0 = <&i2s0m0_lrck
+//                     &i2s0m0_sclk
+//                     &i2s0m0_sdi0
+//                     &i2s0m0_sdo0>;
+//};
+
+//>> rk3562-kickpi-k3.dtsi
+&i2c0 {
+        status = "okay";
+
+        hym8563: hym8563@51 {
+                compatible = "haoyu,hym8563";
+                reg = <0x51>;
+                #clock-cells = <0>;
+                clock-frequency = <32768>;
+                clock-output-names = "hym8563";
+                // IRQ GPIO IS MODIFYED FOR UPDATE HYM8562 DRIVER
+                //rtc-irq-gpio = <&gpio0 RK_PD3 IRQ_TYPE_EDGE_FALLING>;
+        };
+
+        pca9554: gpio@20 {
+                compatible = "pca9554";
+                reg = <0x20>;
+                status = "okay";
+
+                pca9554_gpio: gpio-normal@20 {
+                        compatible = "pca9554-gpio";
+                        gpio-controller;
+                        #gpio-cells = <2>;
+                };
+        };
+};
+
+//>> rk3562-kickpi-k3.dtsi
+&uart3 {
+        status = "okay";
+        pinctrl-names = "default";
+        pinctrl-0 = <&uart3m0_xfer>;
+};
+
+//>> rk3562-kickpi-k3.dtsi
+&pwm6 {
+	status = "okay";
+};
+
+//>> rk3562-kickpi-k3.dtsi
+&pinctrl {
+	headphone {
+		hp_det: hp-det {
+			rockchip,pins = <4 RK_PB1 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+};
+
+//>> from no where!
+&sdhci {
+	bus-width = <8>;
+	no-sdio;
+	no-sd;
+	non-removable;
+	mmc-hs400-1_8v;
+	mmc-hs400-enhanced-strobe;
+	full-pwr-cycle-in-suspend;
+	status = "okay";
+};
+
+//>> rk3562-kickpi-k3.dtsi
+&sdmmc0 {
+	no-sdio;
+	no-mmc;
+	bus-width = <4>;
+	cap-mmc-highspeed;
+	cap-sd-highspeed;
+	disable-wp;
+	sd-uhs-sdr104;
+	vmmc-supply = <&vcc3v3_sd>;
+	vqmmc-supply = <&vccio_sd>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdmmc0_bus4 &sdmmc0_clk &sdmmc0_cmd &sdmmc0_det>;
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart0m0_xfer>;
+};
+
+&i2c0 {
+	status = "okay";
+
+	rk809: pmic@20 {
+		compatible = "rockchip,rk809";
+		reg = <0x20>;
+		interrupt-parent = <&gpio0>;
+		interrupts = <3 IRQ_TYPE_LEVEL_LOW>;
+
+		pinctrl-names = "default", "pmic-sleep",
+			"pmic-power-off", "pmic-reset";
+		pinctrl-0 = <&pmic_int>;
+		pinctrl-1 = <&soc_slppin_slp>, <&rk817_slppin_slp>;
+		pinctrl-2 = <&soc_slppin_gpio>, <&rk817_slppin_pwrdn>;
+		pinctrl-3 = <&soc_slppin_gpio>, <&rk817_slppin_rst>;
+		rockchip,system-power-controller;
+		wakeup-source;
+		#clock-cells = <1>;
+		clock-output-names = "rk808-clkout1", "rk808-clkout2";
+		/* 1: rst regs (default in codes), 0: rst the pmic */
+		pmic-reset-func = <0>;
+		/* not save the PMIC_POWER_EN register in uboot */
+		not-save-power-en = <1>;
+
+		vcc1-supply = <&vcc3v3_sys>;
+		vcc2-supply = <&vcc3v3_sys>;
+		vcc3-supply = <&vcc3v3_sys>;
+		vcc4-supply = <&vcc3v3_sys>;
+		vcc5-supply = <&vcc3v3_sys>;
+		vcc6-supply = <&vcc3v3_sys>;
+		vcc7-supply = <&vcc3v3_sys>;
+		vcc8-supply = <&vcc3v3_sys>;
+		vcc9-supply = <&vcc3v3_sys>;
+
+		pwrkey {
+			status = "okay";
+		};
+
+		pinctrl_rk8xx: pinctrl_rk8xx {
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			rk817_slppin_null: rk817_slppin_null {
+				pins = "gpio_slp";
+				function = "pin_fun0";
+			};
+
+			rk817_slppin_slp: rk817_slppin_slp {
+				pins = "gpio_slp";
+				function = "pin_fun1";
+			};
+
+			rk817_slppin_pwrdn: rk817_slppin_pwrdn {
+				pins = "gpio_slp";
+				function = "pin_fun2";
+			};
+
+			rk817_slppin_rst: rk817_slppin_rst {
+				pins = "gpio_slp";
+				function = "pin_fun3";
+			};
+		};
+
+		regulators {
+			vdd_logic: DCDC_REG1 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <500000>;
+				regulator-max-microvolt = <1350000>;
+				regulator-init-microvolt = <900000>;
+				regulator-ramp-delay = <6001>;
+				regulator-initial-mode = <0x2>;
+				regulator-name = "vdd_logic";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vdd_cpu: DCDC_REG2 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <500000>;
+				regulator-max-microvolt = <1350000>;
+				regulator-init-microvolt = <900000>;
+				regulator-ramp-delay = <6001>;
+				regulator-initial-mode = <0x2>;
+				regulator-name = "vdd_cpu";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vcc_ddr: DCDC_REG3 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-initial-mode = <0x2>;
+				regulator-name = "vcc_ddr";
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
+			};
+
+			vdd_gpu: DCDC_REG4 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <500000>;
+				regulator-max-microvolt = <1350000>;
+				regulator-init-microvolt = <900000>;
+				regulator-ramp-delay = <6001>;
+				regulator-initial-mode = <0x2>;
+				regulator-name = "vdd_gpu";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vcc2v8_dvp: LDO_REG1 {
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+				regulator-name = "vcc2v8_dvp";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vdda_0v9: LDO_REG2 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <900000>;
+				regulator-name = "vdda_0v9";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vdda0v9_pmu: LDO_REG3 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <900000>;
+				regulator-name = "vdda0v9_pmu";
+				regulator-state-mem {
+				regulator-on-in-suspend;
+					regulator-suspend-microvolt = <900000>;
+				};
+			};
+
+			vccio_acodec: LDO_REG4 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <3000000>;
+				regulator-max-microvolt = <3000000>;
+				regulator-name = "vccio_acodec";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vccio_sd: LDO_REG5 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-name = "vccio_sd";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vcc3v3_pmu: LDO_REG6 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-name = "vcc3v3_pmu";
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <3300000>;
+				};
+			};
+
+			vcca_1v8: LDO_REG7 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-name = "vcca_1v8";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vcca1v8_pmu: LDO_REG8 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-name = "vcca1v8_pmu";
+				regulator-state-mem {
+				regulator-on-in-suspend;
+					regulator-suspend-microvolt = <1800000>;
+				};
+			};
+
+			vcc1v8_dvp: LDO_REG9 {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-name = "vcc1v8_dvp";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vcc_1v8: DCDC_REG5 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-name = "vcc_1v8";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vcc_3v3: SWITCH_REG1 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-name = "vcc_3v3";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vcc3v3_sd: SWITCH_REG2 {
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-name = "vcc3v3_sd";
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+		};
+	};
+};
+
+

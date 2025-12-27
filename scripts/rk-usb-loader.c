@@ -236,7 +236,7 @@ static int upload_image(const char *filename)
 		return ret;
 	}
 
-	dev = rk_usb_open(ctx, 0x2207, 0xffff, 0x350a, 0xfffe);
+	dev = rk_usb_open(ctx, 0x2207, 0xffff, 0x350d, 0xfffe);
 	if (!dev) {
 		libusb_exit(ctx);
 		return 1;

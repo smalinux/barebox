@@ -318,6 +318,8 @@
 		#size-cells = <2>;
 		ranges;
 
+		// SMA IMPORTANT: 562 is same as 68 because first compatible not implemented
+		// upstream
 		pcie2x1: pcie@fe000000 {
 			compatible = "rockchip,rk3562-pcie", "rockchip,rk3568-pcie";
 			reg = <0x0 0xfe000000 0x0 0x400000>,
@@ -523,6 +525,7 @@
 			reg = <0x0 0xfeeb0800 0x0 0x20>;
 		};
 
+		// TODO: no implemntation upstream
 		pmu_grf: syscon@ff010000 {
 			compatible = "rockchip,rk3562-pmu-grf", "syscon", "simple-mfd";
 			reg = <0x0 0xff010000 0x0 0x10000>;
@@ -1181,6 +1184,96 @@
 			status = "disabled";
 		};
 	};
+
+	//>> Required for rk3562-kickpi-usb.dtsi
+	//>> FROM: rk3562.dtsi Vendor
+	u2phy: usb2-phy@ff740000 {
+		compatible = "rockchip,rk3562-usb2phy";
+		reg = <0x0 0xff740000 0x0 0x10000>;
+		clocks = <&cru CLK_USB2PHY_REF>, <&cru PCLK_USB2PHY>;
+		clock-names = "phyclk", "pclk";
+		#clock-cells = <0>;
+		clock-output-names = "usb480m_phy";
+		rockchip,usbgrf = <&usbphy_grf>;
+		status = "disabled";
+
+		u2phy_otg: otg-port {
+			#phy-cells = <0>;
+			interrupts = <GIC_SPI 153 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 154 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 155 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "otg-bvalid", "otg-id", "linestate";
+			status = "disabled";
+		};
+
+		u2phy_host: host-port {
+			#phy-cells = <0>;
+			interrupts = <GIC_SPI 156 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "linestate";
+			status = "disabled";
+		};
+	};
+
+	usb_host0_ehci: usb@fed00000 {
+		compatible = "generic-ehci";
+		reg = <0x0 0xfed00000 0x0 0x40000>;
+		interrupts = <GIC_SPI 150 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&cru HCLK_USB2HOST>, <&cru HCLK_USB2HOST_ARB>,
+			 <&u2phy>;
+		clock-names = "usbhost", "arbiter", "utmi";
+		phys = <&u2phy_host>;
+		phy-names = "usb2-phy";
+		status = "disabled";
+	};
+
+	usb_host0_ohci: usb@fed40000 {
+		compatible = "generic-ohci";
+		reg = <0x0 0xfed40000 0x0 0x40000>;
+		interrupts = <GIC_SPI 151 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&cru HCLK_USB2HOST>, <&cru HCLK_USB2HOST_ARB>,
+			 <&u2phy>;
+		clock-names = "usbhost", "arbiter", "utmi";
+		phys = <&u2phy_host>;
+		phy-names = "usb2-phy";
+		status = "disabled";
+	};
+
+	usbdrd30: usbdrd {
+		compatible = "rockchip,rk3562-dwc3", "rockchip,rk3399-dwc3";
+		clocks = <&cru CLK_USB3OTG_REF>, <&cru CLK_USB3OTG_SUSPEND>,
+			 <&cru ACLK_USB3OTG>, <&cru PCLK_PHP>;
+		clock-names = "ref", "suspend", "bus", "pipe_clk";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		status = "disabled";
+
+		// SMA missing
+		usbdrd_dwc3: usb@fe500000 {
+			compatible = "snps,dwc3";
+			reg = <0x0 0xfe500000 0x0 0x400000>;
+			interrupts = <GIC_SPI 149 IRQ_TYPE_LEVEL_HIGH>;
+			dr_mode = "otg";
+			phys = <&u2phy_otg>, <&combphy PHY_TYPE_USB3>;
+			phy-names = "usb2-phy", "usb3-phy";
+			phy_type = "utmi_wide";
+			power-domains = <&power RK3562_PD_PHP>;
+			resets = <&cru SRST_USB3OTG>;
+			reset-names = "usb3-otg";
+			snps,dis_enblslpm_quirk;
+			snps,dis-u1-entry-quirk;
+			snps,dis-u2-entry-quirk;
+			snps,dis-u2-freeclk-exists-quirk;
+			snps,dis-del-phy-power-chg-quirk;
+			snps,dis-tx-ipgap-linecheck-quirk;
+			snps,dis_rxdet_inp3_quirk;
+			snps,parkmode-disable-hs-quirk;
+			snps,parkmode-disable-ss-quirk;
+			quirk-skip-phy-init;
+			status = "disabled";
+		};
+	};
+
 };
 
 #include "rk3562-pinctrl.dtsi"
