@@ -38,6 +38,8 @@ int optee_verify_header (const struct optee_header *hdr);
 void optee_set_membase(const struct optee_header *hdr);
 int optee_get_membase(u64 *membase);
 void optee_handoff_overlay(void *ovl, unsigned int ovl_sz);
+void optee_register_overlay(void);
+bool optee_overlay_registered(void);
 
 #else
 
@@ -52,6 +54,15 @@ static inline int optee_get_membase(u64 *membase)
 
 static inline void optee_handoff_overlay(void *ovl, unsigned int ovl_sz)
 {
+}
+
+static inline void optee_register_overlay(void)
+{
+}
+
+static inline bool optee_overlay_registered(void)
+{
+	return false;
 }
 
 #endif /* CONFIG_HAVE_OPTEE */
