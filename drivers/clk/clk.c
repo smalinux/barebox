@@ -237,13 +237,12 @@ void clk_hw_forward_rate_request(const struct clk_hw *hw,
 	req->max_rate = old_req->max_rate;
 }
 
-/*
- * CLK_MUX_ROUND_CLOSEST is not implemented in barebox; for now we
- * always pick the highest rate that does not exceed the target.
- */
 static bool mux_is_better_rate(unsigned long rate, unsigned long now,
-			       unsigned long best)
+			       unsigned long best, unsigned long flags)
 {
+	if (flags & CLK_MUX_ROUND_CLOSEST)
+		return abs(now - rate) < abs(best - rate);
+
 	return now <= rate && now > best;
 }
 
@@ -339,7 +338,7 @@ int clk_mux_determine_rate_flags(struct clk_hw *hw,
 			parent_rate = clk_hw_get_rate(parent);
 		}
 
-		if (mux_is_better_rate(req->rate, parent_rate, best)) {
+		if (mux_is_better_rate(req->rate, parent_rate, best, flags)) {
 			best_parent = parent;
 			best = parent_rate;
 		}
@@ -363,6 +362,13 @@ int __clk_mux_determine_rate(struct clk_hw *hw,
 }
 EXPORT_SYMBOL_GPL(__clk_mux_determine_rate);
 
+int __clk_mux_determine_rate_closest(struct clk_hw *hw,
+				     struct clk_rate_request *req)
+{
+	return clk_mux_determine_rate_flags(hw, req, CLK_MUX_ROUND_CLOSEST);
+}
+EXPORT_SYMBOL_GPL(__clk_mux_determine_rate_closest);
+
 static long clk_determine_round(struct clk *clk, unsigned long rate)
 {
 	struct clk_hw *hw;
@@ -379,11 +385,6 @@ static long clk_determine_round(struct clk *clk, unsigned long rate)
 			return ret;
 
 		return req.rate;
-	}
-
-	if (clk->ops->round_rate) {
-		return clk->ops->round_rate(hw, rate,
-					    &req.best_parent_rate);
 	}
 
 	if (clk->flags & CLK_SET_RATE_PARENT)
@@ -411,6 +412,35 @@ unsigned long clk_hw_round_rate(struct clk_hw *hw, unsigned long rate)
 		return 0;
 
 	return ret;
+}
+
+/**
+ * clk_determine_rate_using_round_rate - bridge a round_rate callback into
+ * determine_rate
+ * @hw: the clk_hw for the clock
+ * @req: the rate request to be filled in
+ * @round_rate: the round_rate callback to delegate to
+ *
+ * This helper allows drivers that still have a round_rate implementation
+ * to provide a determine_rate callback without rewriting their rate
+ * rounding logic.  The round_rate function is called with the requested
+ * rate and parent rate from @req, and its return value is stored back
+ * into @req->rate.
+ */
+int clk_determine_rate_using_round_rate(struct clk_hw *hw,
+					struct clk_rate_request *req,
+					long (*round_rate)(struct clk_hw *,
+							   unsigned long,
+							   unsigned long *))
+{
+	long rate;
+
+	rate = round_rate(hw, req->rate, &req->best_parent_rate);
+	if (rate < 0)
+		return rate;
+
+	req->rate = rate;
+	return 0;
 }
 
 int clk_set_rate(struct clk *clk, unsigned long rate)
@@ -468,9 +498,6 @@ int clk_set_rate(struct clk *clk, unsigned long rate)
 					return ret;
 			}
 		}
-	} else if (clk->ops->round_rate) {
-		if (current_rate == clk_round_rate(clk, rate))
-			return 0;
 	} else {
 		if (current_rate == rate)
 			return 0;
@@ -930,27 +957,6 @@ int clk_hw_is_enabled(struct clk_hw *hw)
 int clk_is_enabled_always(struct clk_hw *hw)
 {
 	return 1;
-}
-
-long clk_parent_round_rate(struct clk_hw *hw, unsigned long rate,
-				unsigned long *prate)
-{
-	struct clk *clk = clk_hw_to_clk(hw);
-
-	if (!(clk->flags & CLK_SET_RATE_PARENT))
-		return *prate;
-
-	return clk_round_rate(clk_get_parent(clk), rate);
-}
-
-int clk_parent_set_rate(struct clk_hw *hw, unsigned long rate,
-				unsigned long parent_rate)
-{
-	struct clk *clk = clk_hw_to_clk(hw);
-
-	if (!(clk->flags & CLK_SET_RATE_PARENT))
-		return 0;
-	return clk_set_rate(clk_get_parent(clk), rate);
 }
 
 int clk_name_set_parent(const char *clkname, const char *clkparentname)
