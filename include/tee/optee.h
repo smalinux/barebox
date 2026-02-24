@@ -37,6 +37,9 @@ int optee_verify_header (const struct optee_header *hdr);
 
 void optee_set_membase(const struct optee_header *hdr);
 int optee_get_membase(u64 *membase);
+void optee_handoff_overlay(void *ovl, unsigned int ovl_sz);
+void optee_register_overlay(void);
+bool optee_overlay_registered(void);
 
 #else
 
@@ -49,15 +52,35 @@ static inline int optee_get_membase(u64 *membase)
 	return -ENOSYS;
 }
 
+static inline void optee_handoff_overlay(void *ovl, unsigned int ovl_sz)
+{
+}
+
+static inline void optee_register_overlay(void)
+{
+}
+
+static inline bool optee_overlay_registered(void)
+{
+	return false;
+}
+
 #endif /* CONFIG_HAVE_OPTEE */
 
 #ifdef __PBL__
 
-int start_optee_early(void* fdt, void* tee);
+int start_optee_early(void *fdt, void *tee);
 int imx6q_start_optee_early(void *fdt, void *tee, void *data_location,
 			    unsigned int data_location_size);
 int imx6ul_start_optee_early(void *fdt, void *tee, void *data_location,
 			     unsigned int data_location_size);
+
+#else
+
+static inline int start_optee_early(void *fdt, void *tee)
+{
+	return -ENOSYS;
+}
 
 #endif /* __PBL__ */
 
