@@ -23,6 +23,7 @@
 #include <linux/ctype.h>
 #include <linux/err.h>
 #include <pm_domain.h>
+#include <tee/optee.h>
 
 static struct device_node *root_node;
 
@@ -2137,6 +2138,8 @@ int barebox_register_fdt(const void *dtb)
 		return PTR_ERR(root);
 	}
 
+	optee_register_overlay();
+
 	return barebox_register_of(root);
 }
 
@@ -2153,7 +2156,9 @@ int of_device_is_available(const struct device_node *device)
 	const char *status;
 	int statlen;
 
-	status = of_get_property(device, "status", &statlen);
+	status = of_get_property(device, "barebox,status", &statlen);
+	if (status == NULL)
+		status = of_get_property(device, "status", &statlen);
 	if (status == NULL)
 		return 1;
 
