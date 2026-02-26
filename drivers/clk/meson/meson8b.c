@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/meson8b.c?id=aaee6f3bce3fe11ecdb7357a4b5a620205c4ecea
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2015 Endless Mobile, Inc.
@@ -9,9 +10,9 @@
 
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
-#include <linux/init.h>
-#include <linux/mfd/syscon.h>
-#include <linux/of_address.h>
+#include <init.h>
+#include <mfd/syscon.h>
+#include <of_address.h>
 #include <linux/reset-controller.h>
 #include <linux/slab.h>
 #include <linux/regmap.h>
@@ -3573,45 +3574,48 @@ static const struct reset_control_ops meson8b_clk_reset_ops = {
 };
 
 struct meson8b_nb_data {
-	struct notifier_block nb;
+	// SMA: notifier
+	//struct notifier_block nb;
 	struct clk_hw *cpu_clk;
 };
 
-static int meson8b_cpu_clk_notifier_cb(struct notifier_block *nb,
-				       unsigned long event, void *data)
-{
-	struct meson8b_nb_data *nb_data =
-		container_of(nb, struct meson8b_nb_data, nb);
-	struct clk_hw *parent_clk;
-	int ret;
+// SMA: notifier
+//static int meson8b_cpu_clk_notifier_cb(struct notifier_block *nb,
+//				       unsigned long event, void *data)
+//{
+//	struct meson8b_nb_data *nb_data =
+//		container_of(nb, struct meson8b_nb_data, nb);
+//	struct clk_hw *parent_clk;
+//	int ret;
+//
+//	switch (event) {
+//	case PRE_RATE_CHANGE:
+//		/* xtal */
+//		parent_clk = clk_hw_get_parent_by_index(nb_data->cpu_clk, 0);
+//		break;
+//
+//	case POST_RATE_CHANGE:
+//		/* cpu_scale_out_sel */
+//		parent_clk = clk_hw_get_parent_by_index(nb_data->cpu_clk, 1);
+//		break;
+//
+//	default:
+//		return NOTIFY_DONE;
+//	}
+//
+//	ret = clk_hw_set_parent(nb_data->cpu_clk, parent_clk);
+//	if (ret)
+//		return notifier_from_errno(ret);
+//
+//	udelay(100);
+//
+//	return NOTIFY_OK;
+//}
 
-	switch (event) {
-	case PRE_RATE_CHANGE:
-		/* xtal */
-		parent_clk = clk_hw_get_parent_by_index(nb_data->cpu_clk, 0);
-		break;
-
-	case POST_RATE_CHANGE:
-		/* cpu_scale_out_sel */
-		parent_clk = clk_hw_get_parent_by_index(nb_data->cpu_clk, 1);
-		break;
-
-	default:
-		return NOTIFY_DONE;
-	}
-
-	ret = clk_hw_set_parent(nb_data->cpu_clk, parent_clk);
-	if (ret)
-		return notifier_from_errno(ret);
-
-	udelay(100);
-
-	return NOTIFY_OK;
-}
-
-static struct meson8b_nb_data meson8b_cpu_nb_data = {
-	.nb.notifier_call = meson8b_cpu_clk_notifier_cb,
-};
+// SMA: notifier related
+//static struct meson8b_nb_data meson8b_cpu_nb_data = {
+//	.nb.notifier_call = meson8b_cpu_clk_notifier_cb,
+//};
 
 static struct meson_clk_hw_data meson8_clks = {
 	.hws = meson8_hw_clks,
@@ -3671,12 +3675,14 @@ static void __init meson8b_clkc_init_common(struct device_node *np,
 		if (!hw_clks->hws[i])
 			continue;
 
-		ret = of_clk_hw_register(np, hw_clks->hws[i]);
-		if (ret)
-			return;
+		// SMA: what is the equvilant to this?
+		//ret = of_clk_hw_register(np, hw_clks->hws[i]);
+		//if (ret)
+		//	return;
 	}
 
-	meson8b_cpu_nb_data.cpu_clk = hw_clks->hws[CLKID_CPUCLK];
+	// SMA: notifier related
+	// meson8b_cpu_nb_data.cpu_clk = hw_clks->hws[CLKID_CPUCLK];
 
 	/*
 	 * FIXME we shouldn't program the muxes in notifier handlers. The
@@ -3685,12 +3691,13 @@ static void __init meson8b_clkc_init_common(struct device_node *np,
 	 */
 	notifier_clk_name = clk_hw_get_name(&meson8b_cpu_scale_out_sel.hw);
 	notifier_clk = __clk_lookup(notifier_clk_name);
-	ret = clk_notifier_register(notifier_clk, &meson8b_cpu_nb_data.nb);
-	if (ret) {
-		pr_err("%s: failed to register the CPU clock notifier\n",
-		       __func__);
-		return;
-	}
+	// SMA: notifier related
+	//ret = clk_notifier_register(notifier_clk, &meson8b_cpu_nb_data.nb);
+	//if (ret) {
+	//	pr_err("%s: failed to register the CPU clock notifier\n",
+	//	       __func__);
+	//	return;
+	//}
 
 	ret = of_clk_add_hw_provider(np, meson_clk_hw_get, hw_clks);
 	if (ret)

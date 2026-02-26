@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/clk-regmap.c?id=21ed19d1186314940d4300c39bf54fe0a410ee44
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2018 BayLibre, SAS.
@@ -6,7 +7,7 @@
 
 #include <linux/device.h>
 #include <linux/module.h>
-#include <linux/mfd/syscon.h>
+#include <mfd/syscon.h>
 #include "clk-regmap.h"
 
 int clk_regmap_init(struct clk_hw *hw)
@@ -48,7 +49,7 @@ int clk_regmap_init(struct clk_hw *hw)
 	/* Bail out if regmap can't be found */
 	return -EINVAL;
 }
-EXPORT_SYMBOL_NS_GPL(clk_regmap_init, "CLK_MESON");
+EXPORT_SYMBOL_GPL(clk_regmap_init);
 
 static int clk_regmap_gate_endisable(struct clk_hw *hw, int enable)
 {
@@ -93,13 +94,13 @@ const struct clk_ops clk_regmap_gate_ops = {
 	.disable = clk_regmap_gate_disable,
 	.is_enabled = clk_regmap_gate_is_enabled,
 };
-EXPORT_SYMBOL_NS_GPL(clk_regmap_gate_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(clk_regmap_gate_ops);
 
 const struct clk_ops clk_regmap_gate_ro_ops = {
 	.init		= clk_regmap_init,
 	.is_enabled = clk_regmap_gate_is_enabled,
 };
-EXPORT_SYMBOL_NS_GPL(clk_regmap_gate_ro_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(clk_regmap_gate_ro_ops);
 
 static unsigned long clk_regmap_div_recalc_rate(struct clk_hw *hw,
 						unsigned long prate)
@@ -171,14 +172,14 @@ const struct clk_ops clk_regmap_divider_ops = {
 	.determine_rate = clk_regmap_div_determine_rate,
 	.set_rate = clk_regmap_div_set_rate,
 };
-EXPORT_SYMBOL_NS_GPL(clk_regmap_divider_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(clk_regmap_divider_ops);
 
 const struct clk_ops clk_regmap_divider_ro_ops = {
 	.init = clk_regmap_init,
 	.recalc_rate = clk_regmap_div_recalc_rate,
 	.determine_rate = clk_regmap_div_determine_rate,
 };
-EXPORT_SYMBOL_NS_GPL(clk_regmap_divider_ro_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(clk_regmap_divider_ro_ops);
 
 static u8 clk_regmap_mux_get_parent(struct clk_hw *hw)
 {
@@ -222,15 +223,14 @@ const struct clk_ops clk_regmap_mux_ops = {
 	.set_parent = clk_regmap_mux_set_parent,
 	.determine_rate = clk_regmap_mux_determine_rate,
 };
-EXPORT_SYMBOL_NS_GPL(clk_regmap_mux_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(clk_regmap_mux_ops);
 
 const struct clk_ops clk_regmap_mux_ro_ops = {
 	.init		= clk_regmap_init,
 	.get_parent = clk_regmap_mux_get_parent,
 };
-EXPORT_SYMBOL_NS_GPL(clk_regmap_mux_ro_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(clk_regmap_mux_ro_ops);
 
 MODULE_DESCRIPTION("Amlogic regmap backed clock driver");
 MODULE_AUTHOR("Jerome Brunet <jbrunet@baylibre.com>");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

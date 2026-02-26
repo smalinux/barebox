@@ -1,10 +1,11 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/gxbb-aoclk.c?id=b7358d14f176a5508d6330dc967b4ce3a5b08684
 // SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
 /*
  * Copyright (c) 2016 BayLibre, SAS.
  * Author: Neil Armstrong <narmstrong@baylibre.com>
  */
 #include <linux/device.h>
-#include <linux/mfd/syscon.h>
+#include <mfd/syscon.h>
 #include <linux/module.h>
 #include "meson-aoclk.h"
 
@@ -264,15 +265,12 @@ static const struct of_device_id gxbb_ao_clkc_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, gxbb_ao_clkc_match_table);
 
-static struct platform_driver gxbb_ao_clkc_driver = {
+static struct driver gxbb_ao_clkc_driver = {
 	.probe		= meson_aoclkc_probe,
-	.driver		= {
-		.name	= "gxbb-aoclkc",
-		.of_match_table = gxbb_ao_clkc_match_table,
-	},
+	.name	= "gxbb-aoclkc",
+	.of_match_table = gxbb_ao_clkc_match_table,
 };
-module_platform_driver(gxbb_ao_clkc_driver);
+core_platform_driver(gxbb_ao_clkc_driver);
 
 MODULE_DESCRIPTION("Amlogic GXBB Always-ON Clock Controller driver");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/meson8-ddr.c?id=d7c001bd76b7f7e6c05f615d472b5daadc87b434
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Amlogic Meson8 DDR clock controller
@@ -8,7 +9,7 @@
 #include <dt-bindings/clock/meson8-ddr-clkc.h>
 
 #include <linux/clk-provider.h>
-#include <linux/platform_device.h>
+#include <linux/device.h>
 
 #include "clk-regmap.h"
 #include "clk-pll.h"
@@ -101,12 +102,10 @@ static const struct of_device_id meson8_ddr_clkc_match_table[] = {
 	{ /* sentinel */ }
 };
 
-static struct platform_driver meson8_ddr_clkc_driver = {
+static struct driver meson8_ddr_clkc_driver = {
 	.probe		= meson_clkc_mmio_probe,
-	.driver		= {
-		.name	= "meson8-ddr-clkc",
-		.of_match_table = meson8_ddr_clkc_match_table,
-	},
+	.name	= "meson8-ddr-clkc",
+	.of_match_table = meson8_ddr_clkc_match_table,
 };
 
-builtin_platform_driver(meson8_ddr_clkc_driver);
+core_platform_driver(meson8_ddr_clkc_driver);

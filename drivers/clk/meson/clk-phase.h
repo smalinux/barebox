@@ -1,3 +1,4 @@
+/* SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/clk-phase.h?id=7b70689b07c1d336a5ad6906927aa413619029bd */
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2019 BayLibre, SAS.

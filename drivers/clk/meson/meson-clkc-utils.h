@@ -1,3 +1,4 @@
+/* SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/meson-clkc-utils.h?id=955e18baeb933096f417ac01d6781380d7c8a374 */
 /* SPDX-License-Identifier: (GPL-2.0+ OR MIT) */
 /*
  * Copyright (c) 2023 Neil Armstrong <neil.armstrong@linaro.org>
@@ -6,10 +7,10 @@
 #ifndef __MESON_CLKC_UTILS_H__
 #define __MESON_CLKC_UTILS_H__
 
-#include <linux/of_device.h>
+#include <of_device.h>
 #include <linux/clk-provider.h>
 
-struct platform_device;
+struct device;
 
 struct meson_clk_hw_data {
 	struct clk_hw	**hws;
@@ -24,8 +25,8 @@ struct meson_clkc_data {
 	struct meson_clk_hw_data	hw_clks;
 };
 
-int meson_clkc_syscon_probe(struct platform_device *pdev);
-int meson_clkc_mmio_probe(struct platform_device *pdev);
+int meson_clkc_syscon_probe(struct device *dev);
+int meson_clkc_mmio_probe(struct device *dev);
 
 #define __MESON_PCLK(_name, _reg, _bit, _ops, _pdata, _flags)		\
 struct clk_regmap _name = {						\

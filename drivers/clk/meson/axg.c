@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/axg.c?id=aaee6f3bce3fe11ecdb7357a4b5a620205c4ecea
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * AmLogic Meson-AXG Clock Controller Driver
@@ -10,7 +11,7 @@
  */
 
 #include <linux/clk-provider.h>
-#include <linux/init.h>
+#include <init.h>
 #include <linux/mod_devicetable.h>
 #include <linux/device.h>
 #include <linux/module.h>
@@ -2135,15 +2136,12 @@ static const struct of_device_id axg_clkc_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, axg_clkc_match_table);
 
-static struct platform_driver axg_clkc_driver = {
+static struct driver axg_clkc_driver = {
 	.probe		= meson_clkc_syscon_probe,
-	.driver		= {
-		.name	= "axg-clkc",
-		.of_match_table = axg_clkc_match_table,
-	},
+	.name	= "axg-clkc",
+	.of_match_table = axg_clkc_match_table,
 };
-module_platform_driver(axg_clkc_driver);
+core_platform_driver(axg_clkc_driver);
 
 MODULE_DESCRIPTION("Amlogic AXG Main Clock Controller driver");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

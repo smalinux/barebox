@@ -1,13 +1,15 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/meson-clkc-utils.c?id=480197ceece792b887a6f3361080a030eb8e4846
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2023 Neil Armstrong <neil.armstrong@linaro.org>
  */
 
+#include <linux/clk.h>
 #include <linux/clk-provider.h>
-#include <linux/mfd/syscon.h>
+#include <mfd/syscon.h>
 #include <linux/module.h>
-#include <linux/of_device.h>
-#include <linux/platform_device.h>
+#include <of_device.h>
+#include <linux/device.h>
 #include <linux/regmap.h>
 
 #include "meson-clkc-utils.h"
@@ -24,7 +26,7 @@ struct clk_hw *meson_clk_hw_get(struct of_phandle_args *clkspec, void *clk_hw_da
 
 	return data->hws[idx];
 }
-EXPORT_SYMBOL_NS_GPL(meson_clk_hw_get, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_clk_hw_get);
 
 static int meson_clkc_init(struct device *dev, struct regmap *map)
 {
@@ -46,7 +48,7 @@ static int meson_clkc_init(struct device *dev, struct regmap *map)
 		if (!hw)
 			continue;
 
-		ret = devm_clk_hw_register(dev, hw);
+		ret = clk_hw_register(dev, hw);
 		if (ret) {
 			dev_err(dev, "registering %s clock failed\n",
 				hw->init->name);
@@ -54,12 +56,11 @@ static int meson_clkc_init(struct device *dev, struct regmap *map)
 		}
 	}
 
-	return devm_of_clk_add_hw_provider(dev, meson_clk_hw_get, (void *)&data->hw_clks);
+	return of_clk_add_hw_provider(dev, meson_clk_hw_get, (void *)&data->hw_clks);
 }
 
-int meson_clkc_syscon_probe(struct platform_device *pdev)
+int meson_clkc_syscon_probe(struct device *dev)
 {
-	struct device *dev = &pdev->dev;
 	struct device_node *np;
 	struct regmap *map;
 
@@ -73,12 +74,11 @@ int meson_clkc_syscon_probe(struct platform_device *pdev)
 
 	return meson_clkc_init(dev, map);
 }
-EXPORT_SYMBOL_NS_GPL(meson_clkc_syscon_probe, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_clkc_syscon_probe);
 
-int meson_clkc_mmio_probe(struct platform_device *pdev)
+int meson_clkc_mmio_probe(struct device *dev)
 {
 	const struct meson_clkc_data *data;
-	struct device *dev = &pdev->dev;
 	struct resource *res;
 	void __iomem *base;
 	struct regmap *map;
@@ -92,20 +92,21 @@ int meson_clkc_mmio_probe(struct platform_device *pdev)
 	if (!data)
 		return -EINVAL;
 
-	base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
+	// SMA: fixme
+	base = dev_platform_get_and_ioremap_resource(dev, 0, &res);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
 	regmap_cfg.max_register = resource_size(res) - regmap_cfg.reg_stride;
 
-	map = devm_regmap_init_mmio(dev, base, &regmap_cfg);
+	// SMA: fixme
+	map = regmap_init_mmio(dev, base, &regmap_cfg);
 	if (IS_ERR(map))
 		return PTR_ERR(map);
 
 	return meson_clkc_init(dev, map);
 }
-EXPORT_SYMBOL_NS_GPL(meson_clkc_mmio_probe, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_clkc_mmio_probe);
 
 MODULE_DESCRIPTION("Amlogic Clock Controller Utilities");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

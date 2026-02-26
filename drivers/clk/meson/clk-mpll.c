@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/clk-mpll.c?id=21ed19d1186314940d4300c39bf54fe0a410ee44
 // SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
 /*
  * Copyright (c) 2016 AmLogic, Inc.
@@ -160,7 +161,7 @@ const struct clk_ops meson_clk_mpll_ro_ops = {
 	.recalc_rate	= mpll_recalc_rate,
 	.determine_rate	= mpll_determine_rate,
 };
-EXPORT_SYMBOL_NS_GPL(meson_clk_mpll_ro_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_clk_mpll_ro_ops);
 
 const struct clk_ops meson_clk_mpll_ops = {
 	.recalc_rate	= mpll_recalc_rate,
@@ -168,9 +169,8 @@ const struct clk_ops meson_clk_mpll_ops = {
 	.set_rate	= mpll_set_rate,
 	.init		= mpll_init,
 };
-EXPORT_SYMBOL_NS_GPL(meson_clk_mpll_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_clk_mpll_ops);
 
 MODULE_DESCRIPTION("Amlogic MPLL driver");
 MODULE_AUTHOR("Michael Turquette <mturquette@baylibre.com>");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

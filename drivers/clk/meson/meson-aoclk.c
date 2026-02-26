@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/meson-aoclk.c?id=2aeeb649ead230c37415891c89bade3a8ad9eb0b
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Amlogic Meson-AXG Clock Controller Driver
@@ -10,10 +11,11 @@
  * Author: Yixun Lan <yixun.lan@amlogic.com>
  */
 
-#include <linux/platform_device.h>
+#include <linux/clk.h>
+#include <linux/device.h>
 #include <linux/reset-controller.h>
-#include <linux/mfd/syscon.h>
-#include <linux/of.h>
+#include <mfd/syscon.h>
+#include <of.h>
 #include <linux/module.h>
 
 #include <linux/slab.h>
@@ -34,12 +36,11 @@ static const struct reset_control_ops meson_aoclk_reset_ops = {
 	.reset = meson_aoclk_do_reset,
 };
 
-int meson_aoclkc_probe(struct platform_device *pdev)
+int meson_aoclkc_probe(struct device *dev)
 {
 	struct meson_aoclk_reset_controller *rstc;
 	const struct meson_clkc_data *clkc_data;
 	const struct meson_aoclk_data *data;
-	struct device *dev = &pdev->dev;
 	struct device_node *np;
 	struct regmap *regmap;
 	int ret;
@@ -48,7 +49,7 @@ int meson_aoclkc_probe(struct platform_device *pdev)
 	if (!clkc_data)
 		return -EINVAL;
 
-	ret = meson_clkc_syscon_probe(pdev);
+	ret = meson_clkc_syscon_probe(dev);
 	if (ret)
 		return ret;
 
@@ -73,7 +74,7 @@ int meson_aoclkc_probe(struct platform_device *pdev)
 	rstc->reset.ops = &meson_aoclk_reset_ops;
 	rstc->reset.nr_resets = data->num_reset;
 	rstc->reset.of_node = dev->of_node;
-	ret = devm_reset_controller_register(dev, &rstc->reset);
+	ret = reset_controller_register(&rstc->reset);
 	if (ret) {
 		dev_err(dev, "failed to register reset controller\n");
 		return ret;
@@ -81,8 +82,7 @@ int meson_aoclkc_probe(struct platform_device *pdev)
 
 	return 0;
 }
-EXPORT_SYMBOL_NS_GPL(meson_aoclkc_probe, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_aoclkc_probe);
 
 MODULE_DESCRIPTION("Amlogic Always-ON Clock Controller helpers");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

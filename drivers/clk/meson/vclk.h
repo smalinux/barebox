@@ -1,3 +1,4 @@
+/* SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/vclk.h?id=bb5aa08572b5313157c093a09d53ebf2efda3dc1 */
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2024 Neil Armstrong <neil.armstrong@linaro.org>

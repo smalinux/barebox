@@ -1,3 +1,4 @@
+/* SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/clk-regmap.h?id=32ee5475f7e34fbd6539998a4e5f9bd05486672e */
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2018 BayLibre, SAS.

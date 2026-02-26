@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/g12a-aoclk.c?id=b7358d14f176a5508d6330dc967b4ce3a5b08684
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Amlogic Meson-AXG Clock Controller Driver
@@ -11,7 +12,7 @@
 #include <linux/clk-provider.h>
 #include <linux/device.h>
 #include <linux/reset-controller.h>
-#include <linux/mfd/syscon.h>
+#include <mfd/syscon.h>
 #include <linux/module.h>
 #include "meson-aoclk.h"
 
@@ -432,15 +433,12 @@ static const struct of_device_id g12a_ao_clkc_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, g12a_ao_clkc_match_table);
 
-static struct platform_driver g12a_ao_clkc_driver = {
+static struct driver g12a_ao_clkc_driver = {
 	.probe		= meson_aoclkc_probe,
-	.driver		= {
-		.name	= "g12a-aoclkc",
-		.of_match_table = g12a_ao_clkc_match_table,
-	},
+	.name	= "g12a-aoclkc",
+	.of_match_table = g12a_ao_clkc_match_table,
 };
-module_platform_driver(g12a_ao_clkc_driver);
+core_platform_driver(g12a_ao_clkc_driver);
 
 MODULE_DESCRIPTION("Amlogic G12A Always-ON Clock Controller driver");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

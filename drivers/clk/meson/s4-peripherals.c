@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/s4-peripherals.c?id=9bada5ff4bf7a057d40ae49eab5d9081535b5f3c
 // SPDX-License-Identifier: (GPL-2.0-only OR MIT)
 /*
  * Amlogic S4 Peripherals Clock Controller Driver
@@ -7,8 +8,8 @@
  */
 
 #include <linux/clk-provider.h>
-#include <linux/of_device.h>
-#include <linux/platform_device.h>
+#include <of_device.h>
+#include <linux/device.h>
 
 #include "clk-regmap.h"
 #include "vid-pll-div.h"
@@ -3046,16 +3047,13 @@ static const struct of_device_id s4_peripherals_clkc_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, s4_peripherals_clkc_match_table);
 
-static struct platform_driver s4_peripherals_clkc_driver = {
+static struct driver s4_peripherals_clkc_driver = {
 	.probe		= meson_clkc_mmio_probe,
-	.driver		= {
-		.name	= "s4-peripherals-clkc",
-		.of_match_table = s4_peripherals_clkc_match_table,
-	},
+	.name	= "s4-peripherals-clkc",
+	.of_match_table = s4_peripherals_clkc_match_table,
 };
-module_platform_driver(s4_peripherals_clkc_driver);
+core_platform_driver(s4_peripherals_clkc_driver);
 
 MODULE_DESCRIPTION("Amlogic S4 Peripherals Clock Controller driver");
 MODULE_AUTHOR("Yu Tu <yu.tu@amlogic.com>");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

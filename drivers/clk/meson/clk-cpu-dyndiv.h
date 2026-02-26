@@ -1,3 +1,4 @@
+/* SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/clk-cpu-dyndiv.h?id=26d34431add04a98a60b8935c25765914fa773f7 */
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2019 BayLibre, SAS.

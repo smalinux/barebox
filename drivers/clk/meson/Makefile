@@ -1,3 +1,4 @@
+# SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/Makefile?id=e256a6602aa0914ff8a40724505ef2a5314a6e8e
 # SPDX-License-Identifier: GPL-2.0-only
 # Amlogic clock drivers
 

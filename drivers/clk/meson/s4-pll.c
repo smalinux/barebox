@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/s4-pll.c?id=d7c001bd76b7f7e6c05f615d472b5daadc87b434
 // SPDX-License-Identifier: (GPL-2.0-only OR MIT)
 /*
  * Amlogic S4 PLL Clock Controller Driver
@@ -7,8 +8,8 @@
  */
 
 #include <linux/clk-provider.h>
-#include <linux/of_device.h>
-#include <linux/platform_device.h>
+#include <of_device.h>
+#include <linux/device.h>
 
 #include "clk-mpll.h"
 #include "clk-pll.h"
@@ -816,16 +817,13 @@ static const struct of_device_id s4_pll_clkc_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, s4_pll_clkc_match_table);
 
-static struct platform_driver s4_pll_clkc_driver = {
+static struct driver s4_pll_clkc_driver = {
 	.probe		= meson_clkc_mmio_probe,
-	.driver		= {
-		.name	= "s4-pll-clkc",
-		.of_match_table = s4_pll_clkc_match_table,
-	},
+	.name	= "s4-pll-clkc",
+	.of_match_table = s4_pll_clkc_match_table,
 };
-module_platform_driver(s4_pll_clkc_driver);
+core_platform_driver(s4_pll_clkc_driver);
 
 MODULE_DESCRIPTION("Amlogic S4 PLL Clock Controller driver");
 MODULE_AUTHOR("Yu Tu <yu.tu@amlogic.com>");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

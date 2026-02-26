@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/clk-phase.c?id=21ed19d1186314940d4300c39bf54fe0a410ee44
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /*
  * Copyright (c) 2018 BayLibre, SAS.
@@ -62,7 +63,7 @@ const struct clk_ops meson_clk_phase_ops = {
 	.get_phase	= meson_clk_phase_get_phase,
 	.set_phase	= meson_clk_phase_set_phase,
 };
-EXPORT_SYMBOL_NS_GPL(meson_clk_phase_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_clk_phase_ops);
 
 /*
  * This is a special clock for the audio controller.
@@ -129,7 +130,7 @@ const struct clk_ops meson_clk_triphase_ops = {
 	.get_phase	= meson_clk_triphase_get_phase,
 	.set_phase	= meson_clk_triphase_set_phase,
 };
-EXPORT_SYMBOL_NS_GPL(meson_clk_triphase_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_clk_triphase_ops);
 
 /*
  * This is a special clock for the audio controller.
@@ -189,9 +190,8 @@ const struct clk_ops meson_sclk_ws_inv_ops = {
 	.get_phase	= meson_sclk_ws_inv_get_phase,
 	.set_phase	= meson_sclk_ws_inv_set_phase,
 };
-EXPORT_SYMBOL_NS_GPL(meson_sclk_ws_inv_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_sclk_ws_inv_ops);
 
 MODULE_DESCRIPTION("Amlogic phase driver");
 MODULE_AUTHOR("Jerome Brunet <jbrunet@baylibre.com>");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

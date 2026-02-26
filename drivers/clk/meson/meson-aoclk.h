@@ -1,3 +1,4 @@
+/* SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/meson-aoclk.h?id=2aeeb649ead230c37415891c89bade3a8ad9eb0b */
 /* SPDX-License-Identifier: (GPL-2.0+ OR MIT) */
 /*
  * Copyright (c) 2017 BayLibre, SAS
@@ -12,7 +13,7 @@
 #define __MESON_AOCLK_H__
 
 #include <linux/clk-provider.h>
-#include <linux/platform_device.h>
+#include <linux/device.h>
 #include <linux/regmap.h>
 #include <linux/reset-controller.h>
 
@@ -32,5 +33,5 @@ struct meson_aoclk_reset_controller {
 	struct regmap				*regmap;
 };
 
-int meson_aoclkc_probe(struct platform_device *pdev);
+int meson_aoclkc_probe(struct device *dev);
 #endif

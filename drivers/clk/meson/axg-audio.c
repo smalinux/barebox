@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/axg-audio.c?id=4cb53fff9db2751f9d94e45c3bcac13f4be4458b
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /*
  * Copyright (c) 2018 BayLibre, SAS.
@@ -7,7 +8,7 @@
 #include <linux/auxiliary_bus.h>
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
-#include <linux/init.h>
+#include <init.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/device.h>
@@ -1323,9 +1324,8 @@ struct audioclk_data {
 	unsigned int max_register;
 };
 
-static int axg_audio_clkc_probe(struct platform_device *pdev)
+static int axg_audio_clkc_probe(struct device *dev)
 {
-	struct device *dev = &pdev->dev;
 	const struct audioclk_data *data;
 	struct auxiliary_device *auxdev;
 	struct regmap *map;
@@ -1338,19 +1338,20 @@ static int axg_audio_clkc_probe(struct platform_device *pdev)
 	if (!data)
 		return -EINVAL;
 
+	// SMA:
 	regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(regs))
 		return PTR_ERR(regs);
 
 	axg_audio_regmap_cfg.max_register = data->max_register;
-	map = devm_regmap_init_mmio(dev, regs, &axg_audio_regmap_cfg);
+	map = regmap_init_mmio(dev, regs, &axg_audio_regmap_cfg);
 	if (IS_ERR(map)) {
 		dev_err(dev, "failed to init regmap: %ld\n", PTR_ERR(map));
 		return PTR_ERR(map);
 	}
 
 	/* Get the mandatory peripheral clock */
-	clk = devm_clk_get_enabled(dev, "pclk");
+	clk = clk_get_enabled(dev, "pclk");
 	if (IS_ERR(clk))
 		return PTR_ERR(clk);
 
@@ -1371,19 +1372,21 @@ static int axg_audio_clkc_probe(struct platform_device *pdev)
 
 		name = hw->init->name;
 
-		ret = devm_clk_hw_register(dev, hw);
+		ret = clk_hw_register(dev, hw);
 		if (ret) {
 			dev_err(dev, "failed to register clock %s\n", name);
 			return ret;
 		}
 	}
 
+	// SMA:
 	ret = devm_of_clk_add_hw_provider(dev, meson_clk_hw_get, (void *)&data->hw_clks);
 	if (ret)
 		return ret;
 
 	/* Register auxiliary reset driver when applicable */
 	if (data->rst_drvname) {
+		// SMA:
 		auxdev = __devm_auxiliary_device_create(dev, dev->driver->name,
 							data->rst_drvname, NULL, 0);
 		if (!auxdev)
@@ -1433,16 +1436,13 @@ static const struct of_device_id clkc_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, clkc_match_table);
 
-static struct platform_driver axg_audio_driver = {
+static struct driver axg_audio_driver = {
 	.probe		= axg_audio_clkc_probe,
-	.driver		= {
-		.name	= "axg-audio-clkc",
-		.of_match_table = clkc_match_table,
-	},
+	.name	= "axg-audio-clkc",
+	.of_match_table = clkc_match_table,
 };
-module_platform_driver(axg_audio_driver);
+core_platform_driver(axg_audio_driver);
 
 MODULE_DESCRIPTION("Amlogic AXG/G12A/SM1 Audio Clock driver");
 MODULE_AUTHOR("Jerome Brunet <jbrunet@baylibre.com>");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

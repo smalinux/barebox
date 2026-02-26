@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/clk-pll.c?id=21ed19d1186314940d4300c39bf54fe0a410ee44
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2015 Endless Mobile, Inc.
@@ -27,7 +28,7 @@
  */
 
 #include <linux/clk-provider.h>
-#include <linux/delay.h>
+#include <clock.h>
 #include <linux/err.h>
 #include <linux/io.h>
 #include <linux/math64.h>
@@ -480,7 +481,7 @@ const struct clk_ops meson_clk_pcie_pll_ops = {
 	.enable		= meson_clk_pcie_pll_enable,
 	.disable	= meson_clk_pll_disable
 };
-EXPORT_SYMBOL_NS_GPL(meson_clk_pcie_pll_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_clk_pcie_pll_ops);
 
 const struct clk_ops meson_clk_pll_ops = {
 	.init		= meson_clk_pll_init,
@@ -491,17 +492,16 @@ const struct clk_ops meson_clk_pll_ops = {
 	.enable		= meson_clk_pll_enable,
 	.disable	= meson_clk_pll_disable
 };
-EXPORT_SYMBOL_NS_GPL(meson_clk_pll_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_clk_pll_ops);
 
 const struct clk_ops meson_clk_pll_ro_ops = {
 	.init		= clk_regmap_init,
 	.recalc_rate	= meson_clk_pll_recalc_rate,
 	.is_enabled	= meson_clk_pll_is_enabled,
 };
-EXPORT_SYMBOL_NS_GPL(meson_clk_pll_ro_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_clk_pll_ro_ops);
 
 MODULE_DESCRIPTION("Amlogic PLL driver");
 MODULE_AUTHOR("Carlo Caione <carlo@endlessm.com>");
 MODULE_AUTHOR("Jerome Brunet <jbrunet@baylibre.com>");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

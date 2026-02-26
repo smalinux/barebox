@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/sclk-div.c?id=21ed19d1186314940d4300c39bf54fe0a410ee44
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /*
  * Copyright (c) 2018 BayLibre, SAS.
@@ -252,9 +253,8 @@ const struct clk_ops meson_sclk_div_ops = {
 	.set_duty_cycle = sclk_div_set_duty_cycle,
 	.init		= sclk_div_init,
 };
-EXPORT_SYMBOL_NS_GPL(meson_sclk_div_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_sclk_div_ops);
 
 MODULE_DESCRIPTION("Amlogic Sample divider driver");
 MODULE_AUTHOR("Jerome Brunet <jbrunet@baylibre.com>");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

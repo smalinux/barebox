@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/c3-peripherals.c?id=01f3a6d1d59b8e25a6de243b0d73075cf0415eaf
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Amlogic C3 Peripherals Clock Controller Driver
@@ -1113,16 +1114,13 @@ static const struct of_device_id c3_peripherals_clkc_match_table[] = {
 
 MODULE_DEVICE_TABLE(of, c3_peripherals_clkc_match_table);
 
-static struct platform_driver c3_peripherals_clkc_driver = {
+static struct driver c3_peripherals_clkc_driver = {
 	.probe		= meson_clkc_mmio_probe,
-	.driver		= {
-		.name	= "c3-peripherals-clkc",
-		.of_match_table = c3_peripherals_clkc_match_table,
-	},
+	.name	= "c3-peripherals-clkc",
+	.of_match_table = c3_peripherals_clkc_match_table,
 };
-module_platform_driver(c3_peripherals_clkc_driver);
+core_platform_driver(c3_peripherals_clkc_driver);
 
 MODULE_DESCRIPTION("Amlogic C3 Peripherals Clock Controller driver");
 MODULE_AUTHOR("Chuan Liu <chuan.liu@amlogic.com>");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

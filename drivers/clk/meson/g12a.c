@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/g12a.c?id=7e2e4e32cd47a4129bf25c21e7049ff0571b7b90
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Amlogic Meson-G12A Clock Controller Driver
@@ -11,8 +12,8 @@
  */
 
 #include <linux/clk-provider.h>
-#include <linux/init.h>
-#include <linux/of.h>
+#include <init.h>
+#include <of.h>
 #include <linux/device.h>
 #include <linux/clk.h>
 #include <linux/module.h>
@@ -1620,24 +1621,26 @@ static struct clk_regmap sm1_dsu_clk = {
 	},
 };
 
-static int g12a_cpu_clk_mux_notifier_cb(struct notifier_block *nb,
-					unsigned long event, void *data)
-{
-	if (event == POST_RATE_CHANGE || event == PRE_RATE_CHANGE) {
-		/* Wait for clock propagation before/after changing the mux */
-		udelay(100);
-		return NOTIFY_OK;
-	}
+// SMA: comment any notifier related functions
+//static int g12a_cpu_clk_mux_notifier_cb(struct notifier_block *nb,
+//					unsigned long event, void *data)
+//{
+//	if (event == POST_RATE_CHANGE || event == PRE_RATE_CHANGE) {
+//		/* Wait for clock propagation before/after changing the mux */
+//		udelay(100);
+//		return NOTIFY_OK;
+//	}
+//
+//	return NOTIFY_DONE;
+//}
 
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block g12a_cpu_clk_mux_nb = {
-	.notifier_call = g12a_cpu_clk_mux_notifier_cb,
-};
+//static struct notifier_block g12a_cpu_clk_mux_nb = {
+//	.notifier_call = g12a_cpu_clk_mux_notifier_cb,
+//};
 
 struct g12a_cpu_clk_dyn_nb_data {
-	struct notifier_block nb;
+	// SMA: notifier
+	//struct notifier_block nb;
 	struct clk_hw *xtal;
 	struct clk_hw *cpu_clk_dyn;
 	struct clk_hw *cpu_clk_postmux0;
@@ -1645,92 +1648,94 @@ struct g12a_cpu_clk_dyn_nb_data {
 	struct clk_hw *cpu_clk_premux1;
 };
 
-static int g12a_cpu_clk_dyn_notifier_cb(struct notifier_block *nb,
-					unsigned long event, void *data)
-{
-	struct g12a_cpu_clk_dyn_nb_data *nb_data =
-		container_of(nb, struct g12a_cpu_clk_dyn_nb_data, nb);
-
-	switch (event) {
-	case PRE_RATE_CHANGE:
-		/*
-		 * This notifier means cpu_clk_dyn0 clock will be changed
-		 * to feed cpu_clk, this is the current path :
-		 * cpu_clk
-		 *    \- cpu_clk_dyn
-		 *          \- cpu_clk_dyn0
-		 *                \- cpu_clk_dyn0_div
-		 *                      \- cpu_clk_dyn0_sel
-		 *				\- fclk_div3 or fclk_div2
-		 *		OR
-		 *                \- cpu_clk_dyn0_sel
-		 *			\- fclk_div3 or fclk_div2
-		 */
-
-		/* Setup cpu_clk_dyn1_sel to xtal */
-		clk_hw_set_parent(nb_data->cpu_clk_premux1,
-				  nb_data->xtal);
-
-		/* Setup cpu_clk_dyn1 to bypass divider */
-		clk_hw_set_parent(nb_data->cpu_clk_postmux1,
-				  nb_data->cpu_clk_premux1);
-
-		/* Switch to parking clk on cpu_clk_postmux1 */
-		clk_hw_set_parent(nb_data->cpu_clk_dyn,
-				  nb_data->cpu_clk_postmux1);
-
-		/*
-		 * Now, cpu_clk is 24MHz in the current path :
-		 * cpu_clk
-		 *    \- cpu_clk_dyn
-		 *          \- cpu_clk_dyn1
-		 *                \- cpu_clk_dyn1_sel
-		 *                      \- xtal
-		 */
-
-		udelay(100);
-
-		return NOTIFY_OK;
-
-	case POST_RATE_CHANGE:
-		/*
-		 * The cpu_clk_dyn0 has ben updated, now switch back
-		 * cpu_clk_dyn to cpu_clk_dyn0 and take the changes
-		 * in account.
-		 */
-
-		/* Configure cpu_clk_dyn back to cpu_clk_postmux0 */
-		clk_hw_set_parent(nb_data->cpu_clk_dyn,
-				  nb_data->cpu_clk_postmux0);
-
-		/*
-		 * new path :
-		 * cpu_clk
-		 *    \- cpu_clk_dyn
-		 *          \- cpu_clk_dyn0
-		 *                \- cpu_clk_dyn0_div
-		 *                      \- cpu_clk_dyn0_sel
-		 *				\- fclk_div3 or fclk_div2
-		 *		OR
-		 *                \- cpu_clk_dyn0_sel
-		 *			\- fclk_div3 or fclk_div2
-		 */
-
-		udelay(100);
-
-		return NOTIFY_OK;
-
-	default:
-		return NOTIFY_DONE;
-	}
-}
+// SMA: notifier
+//static int g12a_cpu_clk_dyn_notifier_cb(struct notifier_block *nb,
+//					unsigned long event, void *data)
+//{
+//	struct g12a_cpu_clk_dyn_nb_data *nb_data =
+//		container_of(nb, struct g12a_cpu_clk_dyn_nb_data, nb);
+//
+//	switch (event) {
+//	case PRE_RATE_CHANGE:
+//		/*
+//		 * This notifier means cpu_clk_dyn0 clock will be changed
+//		 * to feed cpu_clk, this is the current path :
+//		 * cpu_clk
+//		 *    \- cpu_clk_dyn
+//		 *          \- cpu_clk_dyn0
+//		 *                \- cpu_clk_dyn0_div
+//		 *                      \- cpu_clk_dyn0_sel
+//		 *				\- fclk_div3 or fclk_div2
+//		 *		OR
+//		 *                \- cpu_clk_dyn0_sel
+//		 *			\- fclk_div3 or fclk_div2
+//		 */
+//
+//		/* Setup cpu_clk_dyn1_sel to xtal */
+//		clk_hw_set_parent(nb_data->cpu_clk_premux1,
+//				  nb_data->xtal);
+//
+//		/* Setup cpu_clk_dyn1 to bypass divider */
+//		clk_hw_set_parent(nb_data->cpu_clk_postmux1,
+//				  nb_data->cpu_clk_premux1);
+//
+//		/* Switch to parking clk on cpu_clk_postmux1 */
+//		clk_hw_set_parent(nb_data->cpu_clk_dyn,
+//				  nb_data->cpu_clk_postmux1);
+//
+//		/*
+//		 * Now, cpu_clk is 24MHz in the current path :
+//		 * cpu_clk
+//		 *    \- cpu_clk_dyn
+//		 *          \- cpu_clk_dyn1
+//		 *                \- cpu_clk_dyn1_sel
+//		 *                      \- xtal
+//		 */
+//
+//		udelay(100);
+//
+//		return NOTIFY_OK;
+//
+//	case POST_RATE_CHANGE:
+//		/*
+//		 * The cpu_clk_dyn0 has ben updated, now switch back
+//		 * cpu_clk_dyn to cpu_clk_dyn0 and take the changes
+//		 * in account.
+//		 */
+//
+//		/* Configure cpu_clk_dyn back to cpu_clk_postmux0 */
+//		clk_hw_set_parent(nb_data->cpu_clk_dyn,
+//				  nb_data->cpu_clk_postmux0);
+//
+//		/*
+//		 * new path :
+//		 * cpu_clk
+//		 *    \- cpu_clk_dyn
+//		 *          \- cpu_clk_dyn0
+//		 *                \- cpu_clk_dyn0_div
+//		 *                      \- cpu_clk_dyn0_sel
+//		 *				\- fclk_div3 or fclk_div2
+//		 *		OR
+//		 *                \- cpu_clk_dyn0_sel
+//		 *			\- fclk_div3 or fclk_div2
+//		 */
+//
+//		udelay(100);
+//
+//		return NOTIFY_OK;
+//
+//	default:
+//		return NOTIFY_DONE;
+//	}
+//}
 
 static struct g12a_cpu_clk_dyn_nb_data g12a_cpu_clk_dyn0_nb_data = {
 	.cpu_clk_dyn = &g12a_cpu_clk_dyn.hw,
 	.cpu_clk_postmux0 = &g12a_cpu_clk_dyn0.hw,
 	.cpu_clk_postmux1 = &g12a_cpu_clk_dyn1.hw,
 	.cpu_clk_premux1 = &g12a_cpu_clk_dyn1_sel.hw,
-	.nb.notifier_call = g12a_cpu_clk_dyn_notifier_cb,
+	// SMA:
+	//.nb.notifier_call = g12a_cpu_clk_dyn_notifier_cb,
 };
 
 static struct g12a_cpu_clk_dyn_nb_data g12b_cpub_clk_dyn0_nb_data = {
@@ -1738,81 +1743,85 @@ static struct g12a_cpu_clk_dyn_nb_data g12b_cpub_clk_dyn0_nb_data = {
 	.cpu_clk_postmux0 = &g12b_cpub_clk_dyn0.hw,
 	.cpu_clk_postmux1 = &g12b_cpub_clk_dyn1.hw,
 	.cpu_clk_premux1 = &g12b_cpub_clk_dyn1_sel.hw,
-	.nb.notifier_call = g12a_cpu_clk_dyn_notifier_cb,
+	// SMA:
+	//.nb.notifier_call = g12a_cpu_clk_dyn_notifier_cb,
 };
 
 struct g12a_sys_pll_nb_data {
-	struct notifier_block nb;
+	// SMA: notifier
+	//struct notifier_block nb;
 	struct clk_hw *sys_pll;
 	struct clk_hw *cpu_clk;
 	struct clk_hw *cpu_clk_dyn;
 };
 
-static int g12a_sys_pll_notifier_cb(struct notifier_block *nb,
-				    unsigned long event, void *data)
-{
-	struct g12a_sys_pll_nb_data *nb_data =
-		container_of(nb, struct g12a_sys_pll_nb_data, nb);
-
-	switch (event) {
-	case PRE_RATE_CHANGE:
-		/*
-		 * This notifier means sys_pll clock will be changed
-		 * to feed cpu_clk, this the current path :
-		 * cpu_clk
-		 *    \- sys_pll
-		 *          \- sys_pll_dco
-		 */
-
-		/* Configure cpu_clk to use cpu_clk_dyn */
-		clk_hw_set_parent(nb_data->cpu_clk,
-				  nb_data->cpu_clk_dyn);
-
-		/*
-		 * Now, cpu_clk uses the dyn path
-		 * cpu_clk
-		 *    \- cpu_clk_dyn
-		 *          \- cpu_clk_dynX
-		 *                \- cpu_clk_dynX_sel
-		 *		     \- cpu_clk_dynX_div
-		 *                      \- xtal/fclk_div2/fclk_div3
-		 *                   \- xtal/fclk_div2/fclk_div3
-		 */
-
-		udelay(100);
-
-		return NOTIFY_OK;
-
-	case POST_RATE_CHANGE:
-		/*
-		 * The sys_pll has ben updated, now switch back cpu_clk to
-		 * sys_pll
-		 */
-
-		/* Configure cpu_clk to use sys_pll */
-		clk_hw_set_parent(nb_data->cpu_clk,
-				  nb_data->sys_pll);
-
-		udelay(100);
-
-		/* new path :
-		 * cpu_clk
-		 *    \- sys_pll
-		 *          \- sys_pll_dco
-		 */
-
-		return NOTIFY_OK;
-
-	default:
-		return NOTIFY_DONE;
-	}
-}
+// SMA: notifier related
+//static int g12a_sys_pll_notifier_cb(struct notifier_block *nb,
+//				    unsigned long event, void *data)
+//{
+//	struct g12a_sys_pll_nb_data *nb_data =
+//		container_of(nb, struct g12a_sys_pll_nb_data, nb);
+//
+//	switch (event) {
+//	case PRE_RATE_CHANGE:
+//		/*
+//		 * This notifier means sys_pll clock will be changed
+//		 * to feed cpu_clk, this the current path :
+//		 * cpu_clk
+//		 *    \- sys_pll
+//		 *          \- sys_pll_dco
+//		 */
+//
+//		/* Configure cpu_clk to use cpu_clk_dyn */
+//		clk_hw_set_parent(nb_data->cpu_clk,
+//				  nb_data->cpu_clk_dyn);
+//
+//		/*
+//		 * Now, cpu_clk uses the dyn path
+//		 * cpu_clk
+//		 *    \- cpu_clk_dyn
+//		 *          \- cpu_clk_dynX
+//		 *                \- cpu_clk_dynX_sel
+//		 *		     \- cpu_clk_dynX_div
+//		 *                      \- xtal/fclk_div2/fclk_div3
+//		 *                   \- xtal/fclk_div2/fclk_div3
+//		 */
+//
+//		udelay(100);
+//
+//		return NOTIFY_OK;
+//
+//	case POST_RATE_CHANGE:
+//		/*
+//		 * The sys_pll has ben updated, now switch back cpu_clk to
+//		 * sys_pll
+//		 */
+//
+//		/* Configure cpu_clk to use sys_pll */
+//		clk_hw_set_parent(nb_data->cpu_clk,
+//				  nb_data->sys_pll);
+//
+//		udelay(100);
+//
+//		/* new path :
+//		 * cpu_clk
+//		 *    \- sys_pll
+//		 *          \- sys_pll_dco
+//		 */
+//
+//		return NOTIFY_OK;
+//
+//	default:
+//		return NOTIFY_DONE;
+//	}
+//}
 
 static struct g12a_sys_pll_nb_data g12a_sys_pll_nb_data = {
 	.sys_pll = &g12a_sys_pll.hw,
 	.cpu_clk = &g12a_cpu_clk.hw,
 	.cpu_clk_dyn = &g12a_cpu_clk_dyn.hw,
-	.nb.notifier_call = g12a_sys_pll_notifier_cb,
+	// SMA: notifier related
+	//.nb.notifier_call = g12a_sys_pll_notifier_cb,
 };
 
 /* G12B first CPU cluster uses sys1_pll */
@@ -1820,7 +1829,8 @@ static struct g12a_sys_pll_nb_data g12b_cpu_clk_sys1_pll_nb_data = {
 	.sys_pll = &g12b_sys1_pll.hw,
 	.cpu_clk = &g12b_cpu_clk.hw,
 	.cpu_clk_dyn = &g12a_cpu_clk_dyn.hw,
-	.nb.notifier_call = g12a_sys_pll_notifier_cb,
+	// SMA: notifier related
+	//.nb.notifier_call = g12a_sys_pll_notifier_cb,
 };
 
 /* G12B second CPU cluster uses sys_pll */
@@ -1828,7 +1838,8 @@ static struct g12a_sys_pll_nb_data g12b_cpub_clk_sys_pll_nb_data = {
 	.sys_pll = &g12a_sys_pll.hw,
 	.cpu_clk = &g12b_cpub_clk.hw,
 	.cpu_clk_dyn = &g12b_cpub_clk_dyn.hw,
-	.nb.notifier_call = g12a_sys_pll_notifier_cb,
+	// SMA: notifier related
+	//.nb.notifier_call = g12a_sys_pll_notifier_cb,
 };
 
 static struct clk_regmap g12a_cpu_clk_div16_en = {
@@ -5239,32 +5250,34 @@ static int g12a_dvfs_setup_common(struct device *dev, struct clk_hw **hws)
 
 	/* Setup clock notifier for cpu_clk_postmux0 */
 	g12a_cpu_clk_dyn0_nb_data.xtal = xtal;
-	notifier_clk = devm_clk_hw_get_clk(dev, &g12a_cpu_clk_dyn0.hw,
-					   DVFS_CON_ID);
-	ret = devm_clk_notifier_register(dev, notifier_clk,
-					 &g12a_cpu_clk_dyn0_nb_data.nb);
-	if (ret) {
-		dev_err(dev, "failed to register the cpu_clk_dyn0 notifier\n");
-		return ret;
-	}
+	// SMA: notifier related
+	//notifier_clk = clk_hw_to_clk(dev, &g12a_cpu_clk_dyn0.hw,
+	//				   DVFS_CON_ID);
+	//ret = devm_clk_notifier_register(dev, notifier_clk,
+	//				 &g12a_cpu_clk_dyn0_nb_data.nb);
+	//if (ret) {
+	//	dev_err(dev, "failed to register the cpu_clk_dyn0 notifier\n");
+	//	return ret;
+	//}
 
-	/* Setup clock notifier for cpu_clk_dyn mux */
-	notifier_clk = devm_clk_hw_get_clk(dev, &g12a_cpu_clk_dyn.hw,
-					   DVFS_CON_ID);
-	ret = devm_clk_notifier_register(dev, notifier_clk,
-					 &g12a_cpu_clk_mux_nb);
-	if (ret) {
-		dev_err(dev, "failed to register the cpu_clk_dyn notifier\n");
-		return ret;
-	}
+	// SMA:
+	///* Setup clock notifier for cpu_clk_dyn mux */
+	//notifier_clk = devm_clk_hw_get_clk(dev, &g12a_cpu_clk_dyn.hw,
+	//				   DVFS_CON_ID);
+	// SMA: comment notifier related functions
+	//ret = devm_clk_notifier_register(dev, notifier_clk,
+	//				 &g12a_cpu_clk_mux_nb);
+	//if (ret) {
+	//	dev_err(dev, "failed to register the cpu_clk_dyn notifier\n");
+	//	return ret;
+	//}
 
 	return 0;
 }
 
-static int g12b_dvfs_setup(struct platform_device *pdev)
+static int g12b_dvfs_setup(struct device *dev)
 {
 	struct clk_hw **hws = g12b_hw_clks;
-	struct device *dev = &pdev->dev;
 	struct clk *notifier_clk;
 	struct clk_hw *xtal;
 	int ret;
@@ -5275,74 +5288,77 @@ static int g12b_dvfs_setup(struct platform_device *pdev)
 
 	xtal = clk_hw_get_parent_by_index(hws[CLKID_CPU_CLK_DYN1_SEL], 0);
 
-	/* Setup clock notifier for cpu_clk mux */
-	notifier_clk = devm_clk_hw_get_clk(dev, &g12b_cpu_clk.hw,
-					   DVFS_CON_ID);
-	ret = devm_clk_notifier_register(dev, notifier_clk,
-					 &g12a_cpu_clk_mux_nb);
-	if (ret) {
-		dev_err(dev, "failed to register the cpu_clk notifier\n");
-		return ret;
-	}
+	// SMA: notifier
+	///* Setup clock notifier for cpu_clk mux */
+	//notifier_clk = devm_clk_hw_get_clk(dev, &g12b_cpu_clk.hw,
+	//				   DVFS_CON_ID);
+	// SMA: notifier related
+	//ret = devm_clk_notifier_register(dev, notifier_clk,
+	//				 &g12a_cpu_clk_mux_nb);
+	//if (ret) {
+	//	dev_err(dev, "failed to register the cpu_clk notifier\n");
+	//	return ret;
+	//}
 
-	/* Setup clock notifier for sys1_pll */
-	notifier_clk = devm_clk_hw_get_clk(dev, &g12b_sys1_pll.hw,
-					   DVFS_CON_ID);
-	ret = devm_clk_notifier_register(dev, notifier_clk,
-					 &g12b_cpu_clk_sys1_pll_nb_data.nb);
-	if (ret) {
-		dev_err(dev, "failed to register the sys1_pll notifier\n");
-		return ret;
-	}
+	///* Setup clock notifier for sys1_pll */
+	//notifier_clk = devm_clk_hw_get_clk(dev, &g12b_sys1_pll.hw,
+	//				   DVFS_CON_ID);
+	//ret = devm_clk_notifier_register(dev, notifier_clk,
+	//				 &g12b_cpu_clk_sys1_pll_nb_data.nb);
+	//if (ret) {
+	//	dev_err(dev, "failed to register the sys1_pll notifier\n");
+	//	return ret;
+	//}
 
 	/* Add notifiers for the second CPU cluster */
 
 	/* Setup clock notifier for cpub_clk_postmux0 */
 	g12b_cpub_clk_dyn0_nb_data.xtal = xtal;
-	notifier_clk = devm_clk_hw_get_clk(dev, &g12b_cpub_clk_dyn0.hw,
-					   DVFS_CON_ID);
-	ret = devm_clk_notifier_register(dev, notifier_clk,
-					 &g12b_cpub_clk_dyn0_nb_data.nb);
-	if (ret) {
-		dev_err(dev, "failed to register the cpub_clk_dyn0 notifier\n");
-		return ret;
-	}
+	//notifier_clk = devm_clk_hw_get_clk(dev, &g12b_cpub_clk_dyn0.hw,
+	//				   DVFS_CON_ID);
+	//ret = devm_clk_notifier_register(dev, notifier_clk,
+	//				 &g12b_cpub_clk_dyn0_nb_data.nb);
+	//if (ret) {
+	//	dev_err(dev, "failed to register the cpub_clk_dyn0 notifier\n");
+	//	return ret;
+	//}
 
-	/* Setup clock notifier for cpub_clk_dyn mux */
-	notifier_clk = devm_clk_hw_get_clk(dev, &g12b_cpub_clk_dyn.hw,
-					   DVFS_CON_ID);
-	ret = devm_clk_notifier_register(dev, notifier_clk,
-					 &g12a_cpu_clk_mux_nb);
-	if (ret) {
-		dev_err(dev, "failed to register the cpub_clk_dyn notifier\n");
-		return ret;
-	}
+	///* Setup clock notifier for cpub_clk_dyn mux */
+	//notifier_clk = devm_clk_hw_get_clk(dev, &g12b_cpub_clk_dyn.hw,
+	//				   DVFS_CON_ID);
+	// SMA: notifier related
+	//ret = devm_clk_notifier_register(dev, notifier_clk,
+	//				 &g12a_cpu_clk_mux_nb);
+	//if (ret) {
+	//	dev_err(dev, "failed to register the cpub_clk_dyn notifier\n");
+	//	return ret;
+	//}
+    //
+	///* Setup clock notifier for cpub_clk mux */
+	//notifier_clk = devm_clk_hw_get_clk(dev, &g12b_cpub_clk.hw, DVFS_CON_ID);
+	// SMA: notifier related
+	//ret = devm_clk_notifier_register(dev, notifier_clk,
+	//				 &g12a_cpu_clk_mux_nb);
+	//if (ret) {
+	//	dev_err(dev, "failed to register the cpub_clk notifier\n");
+	//	return ret;
+	//}
 
-	/* Setup clock notifier for cpub_clk mux */
-	notifier_clk = devm_clk_hw_get_clk(dev, &g12b_cpub_clk.hw, DVFS_CON_ID);
-	ret = devm_clk_notifier_register(dev, notifier_clk,
-					 &g12a_cpu_clk_mux_nb);
-	if (ret) {
-		dev_err(dev, "failed to register the cpub_clk notifier\n");
-		return ret;
-	}
-
-	/* Setup clock notifier for sys_pll */
-	notifier_clk = devm_clk_hw_get_clk(dev, &g12a_sys_pll.hw, DVFS_CON_ID);
-	ret = devm_clk_notifier_register(dev, notifier_clk,
-					 &g12b_cpub_clk_sys_pll_nb_data.nb);
-	if (ret) {
-		dev_err(dev, "failed to register the sys_pll notifier\n");
-		return ret;
-	}
+	///* Setup clock notifier for sys_pll */
+	//notifier_clk = devm_clk_hw_get_clk(dev, &g12a_sys_pll.hw, DVFS_CON_ID);
+	//ret = devm_clk_notifier_register(dev, notifier_clk,
+	//				 &g12b_cpub_clk_sys_pll_nb_data.nb);
+	//if (ret) {
+	//	dev_err(dev, "failed to register the sys_pll notifier\n");
+	//	return ret;
+	//}
 
 	return 0;
 }
 
-static int g12a_dvfs_setup(struct platform_device *pdev)
+static int g12a_dvfs_setup(struct device *dev)
 {
 	struct clk_hw **hws = g12a_hw_clks;
-	struct device *dev = &pdev->dev;
 	struct clk *notifier_clk;
 	int ret;
 
@@ -5351,42 +5367,44 @@ static int g12a_dvfs_setup(struct platform_device *pdev)
 		return ret;
 
 	/* Setup clock notifier for cpu_clk mux */
-	notifier_clk = devm_clk_hw_get_clk(dev, &g12a_cpu_clk.hw, DVFS_CON_ID);
-	ret = devm_clk_notifier_register(dev, notifier_clk,
-				    &g12a_cpu_clk_mux_nb);
-	if (ret) {
-		dev_err(dev, "failed to register the cpu_clk notifier\n");
-		return ret;
-	}
+	//notifier_clk = devm_clk_hw_get_clk(dev, &g12a_cpu_clk.hw, DVFS_CON_ID);
+	// SMA: notifier related
+	//ret = devm_clk_notifier_register(dev, notifier_clk,
+	//			    &g12a_cpu_clk_mux_nb);
+	//if (ret) {
+	//	dev_err(dev, "failed to register the cpu_clk notifier\n");
+	//	return ret;
+	//}
 
 	/* Setup clock notifier for sys_pll */
-	notifier_clk = devm_clk_hw_get_clk(dev, &g12a_sys_pll.hw, DVFS_CON_ID);
-	ret = devm_clk_notifier_register(dev, notifier_clk,
-					 &g12a_sys_pll_nb_data.nb);
-	if (ret) {
-		dev_err(dev, "failed to register the sys_pll notifier\n");
-		return ret;
-	}
+	//notifier_clk = devm_clk_hw_get_clk(dev, &g12a_sys_pll.hw, DVFS_CON_ID);
+	//ret = devm_clk_notifier_register(dev, notifier_clk,
+	//				 &g12a_sys_pll_nb_data.nb);
+	//if (ret) {
+	//	dev_err(dev, "failed to register the sys_pll notifier\n");
+	//	return ret;
+	//}
 
 	return 0;
 }
 
 struct g12a_clkc_data {
 	const struct meson_clkc_data clkc_data;
-	int (*dvfs_setup)(struct platform_device *pdev);
+	int (*dvfs_setup)(struct device *dev);
 };
 
-static int g12a_clkc_probe(struct platform_device *pdev)
+static int g12a_clkc_probe(struct device *dev)
 {
 	const struct meson_clkc_data *clkc_data;
 	const struct g12a_clkc_data *g12a_data;
 	int ret;
 
-	clkc_data = of_device_get_match_data(&pdev->dev);
+	// SMA:
+	clkc_data = of_device_get_match_data(&dev);
 	if (!clkc_data)
 		return -EINVAL;
 
-	ret = meson_clkc_syscon_probe(pdev);
+	ret = meson_clkc_syscon_probe(dev);
 	if (ret)
 		return ret;
 
@@ -5394,7 +5412,7 @@ static int g12a_clkc_probe(struct platform_device *pdev)
 				 clkc_data);
 
 	if (g12a_data->dvfs_setup)
-		return g12a_data->dvfs_setup(pdev);
+		return g12a_data->dvfs_setup(dev);
 
 	return 0;
 }
@@ -5448,15 +5466,12 @@ static const struct of_device_id g12a_clkc_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, g12a_clkc_match_table);
 
-static struct platform_driver g12a_clkc_driver = {
+static struct driver g12a_clkc_driver = {
 	.probe		= g12a_clkc_probe,
-	.driver		= {
-		.name	= "g12a-clkc",
-		.of_match_table = g12a_clkc_match_table,
-	},
+	.name	= "g12a-clkc",
+	.of_match_table = g12a_clkc_match_table,
 };
-module_platform_driver(g12a_clkc_driver);
+core_platform_driver(g12a_clkc_driver);
 
 MODULE_DESCRIPTION("Amlogic G12/SM1 Main Clock Controller driver");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");

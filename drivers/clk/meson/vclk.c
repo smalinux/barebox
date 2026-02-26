@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/meson/vclk.c?id=21ed19d1186314940d4300c39bf54fe0a410ee44
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2024 Neil Armstrong <neil.armstrong@linaro.org>
@@ -50,7 +51,7 @@ const struct clk_ops meson_vclk_gate_ops = {
 	.disable = meson_vclk_gate_disable,
 	.is_enabled = meson_vclk_gate_is_enabled,
 };
-EXPORT_SYMBOL_NS_GPL(meson_vclk_gate_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_vclk_gate_ops);
 
 /* The VCLK Divider has supplementary reset & enable bits */
 
@@ -136,9 +137,8 @@ const struct clk_ops meson_vclk_div_ops = {
 	.disable = meson_vclk_div_disable,
 	.is_enabled = meson_vclk_div_is_enabled,
 };
-EXPORT_SYMBOL_NS_GPL(meson_vclk_div_ops, "CLK_MESON");
+EXPORT_SYMBOL_GPL(meson_vclk_div_ops);
 
 MODULE_DESCRIPTION("Amlogic vclk clock driver");
 MODULE_AUTHOR("Neil Armstrong <neil.armstrong@linaro.org>");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS("CLK_MESON");
