@@ -103,6 +103,9 @@ int divider_ro_determine_rate(struct clk_hw *hw, struct clk_rate_request *req,
 			      const struct clk_div_table *table, u8 width,
 			      unsigned long flags, unsigned int val);
 
+static inline struct device *clk_hw_get_dev(const struct clk_hw *hw);
+static inline struct device_node *clk_hw_get_of_node(const struct clk_hw *hw);
+
 #define CLK_HW_INIT(_name, _parent, _ops, _flags)		\
 	(&(struct clk_init_data) {				\
 		.flags		= _flags,			\

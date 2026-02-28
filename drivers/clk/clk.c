@@ -853,6 +853,7 @@ struct clk *clk_register(struct device *dev, struct clk_hw *hw)
 	clk->name = xstrdup(init->name);
 	clk->ops = init->ops;
 	clk->num_parents = init->num_parents;
+	clk->dev = dev;
 
 	clk->parents = xzalloc(sizeof(struct clk *) * clk->num_parents);
 
@@ -980,6 +981,19 @@ int clk_name_set_rate(const char *clkname, unsigned long rate)
 
 	return clk_set_rate(clk, rate);
 }
+
+struct device *clk_hw_get_dev(const struct clk_hw *hw)
+{
+	return hw->clk.dev;
+}
+EXPORT_SYMBOL_GPL(clk_hw_get_dev);
+
+struct device_node *clk_hw_get_of_node(const struct clk_hw *hw)
+{
+	struct device *dev = clk_hw_get_dev(hw);
+	return dev ? dev_of_node(dev) : NULL;
+}
+EXPORT_SYMBOL_GPL(clk_hw_get_of_node);
 
 #if defined(CONFIG_COMMON_CLK_OF_PROVIDER)
 /**
