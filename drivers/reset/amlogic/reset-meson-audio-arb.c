@@ -5,8 +5,9 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/module.h>
-#include <linux/of.h>
-#include <linux/platform_device.h>
+#include <of.h>
+#include <of_device.h>
+#include <linux/device.h>
 #include <linux/reset-controller.h>
 #include <linux/spinlock.h>
 
@@ -120,9 +121,9 @@ static const struct of_device_id meson_audio_arb_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, meson_audio_arb_of_match);
 
-static void meson_audio_arb_remove(struct platform_device *pdev)
+static void meson_audio_arb_remove(struct device *dev)
 {
-	struct meson_audio_arb_data *arb = platform_get_drvdata(pdev);
+	struct meson_audio_arb_data *arb = dev_get_drvdata(dev);
 
 	/* Disable all access */
 	spin_lock(&arb->lock);
@@ -130,9 +131,8 @@ static void meson_audio_arb_remove(struct platform_device *pdev)
 	spin_unlock(&arb->lock);
 }
 
-static int meson_audio_arb_probe(struct platform_device *pdev)
+static int meson_audio_arb_probe(struct device *dev)
 {
-	struct device *dev = &pdev->dev;
 	const struct meson_audio_arb_match_data *data;
 	struct meson_audio_arb_data *arb;
 	int ret;
@@ -144,13 +144,13 @@ static int meson_audio_arb_probe(struct platform_device *pdev)
 	arb = devm_kzalloc(dev, sizeof(*arb), GFP_KERNEL);
 	if (!arb)
 		return -ENOMEM;
-	platform_set_drvdata(pdev, arb);
+	dev_set_drvdata(dev, arb);
 
-	arb->clk = devm_clk_get_enabled(dev, NULL);
+	arb->clk = clk_get_enabled(dev, NULL);
 	if (IS_ERR(arb->clk))
 		return dev_err_probe(dev, PTR_ERR(arb->clk), "failed to get clock\n");
 
-	arb->regs = devm_platform_ioremap_resource(pdev, 0);
+	arb->regs = dev_platform_ioremap_resource(dev, 0);
 	if (IS_ERR(arb->regs))
 		return PTR_ERR(arb->regs);
 
@@ -159,7 +159,6 @@ static int meson_audio_arb_probe(struct platform_device *pdev)
 	arb->rstc.nr_resets = data->reset_num;
 	arb->rstc.ops = &meson_audio_arb_rstc_ops;
 	arb->rstc.of_node = dev->of_node;
-	arb->rstc.owner = THIS_MODULE;
 
 	/*
 	 * Enable general :
@@ -169,24 +168,22 @@ static int meson_audio_arb_probe(struct platform_device *pdev)
 	writel(BIT(ARB_GENERAL_BIT), arb->regs);
 
 	/* Register reset controller */
-	ret = devm_reset_controller_register(dev, &arb->rstc);
+	ret = reset_controller_register(&arb->rstc);
 	if (ret) {
 		dev_err(dev, "failed to register arb reset controller\n");
-		meson_audio_arb_remove(pdev);
+		meson_audio_arb_remove(dev);
 	}
 
 	return ret;
 }
 
-static struct platform_driver meson_audio_arb_pdrv = {
+static struct driver meson_audio_arb_pdrv = {
 	.probe = meson_audio_arb_probe,
 	.remove = meson_audio_arb_remove,
-	.driver = {
-		.name = "meson-audio-arb-reset",
-		.of_match_table = meson_audio_arb_of_match,
-	},
+	.name = "meson-audio-arb-reset",
+	.of_match_table = meson_audio_arb_of_match,
 };
-module_platform_driver(meson_audio_arb_pdrv);
+core_platform_driver(meson_audio_arb_pdrv);
 
 MODULE_DESCRIPTION("Amlogic A113 Audio Memory Arbiter");
 MODULE_AUTHOR("Jerome Brunet <jbrunet@baylibre.com>");

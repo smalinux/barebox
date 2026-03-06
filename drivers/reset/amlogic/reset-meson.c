@@ -9,9 +9,9 @@
 
 #include <linux/err.h>
 #include <linux/io.h>
-#include <linux/of.h>
+#include <of.h>
 #include <linux/module.h>
-#include <linux/platform_device.h>
+#include <linux/device.h>
 #include <linux/regmap.h>
 #include <linux/reset-controller.h>
 
@@ -66,14 +66,13 @@ static const struct regmap_config regmap_config = {
 	.reg_stride = 4,
 };
 
-static int meson_reset_probe(struct platform_device *pdev)
+static int meson_reset_probe(struct device *dev)
 {
 	const struct meson_reset_param *param;
-	struct device *dev = &pdev->dev;
 	struct regmap *map;
 	void __iomem *base;
 
-	base = devm_platform_ioremap_resource(pdev, 0);
+	base = dev_platform_ioremap_resource(dev, 0);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
@@ -81,7 +80,7 @@ static int meson_reset_probe(struct platform_device *pdev)
 	if (!param)
 		return -ENODEV;
 
-	map = devm_regmap_init_mmio(dev, base, &regmap_config);
+	map = regmap_init_mmio(dev, base, &regmap_config);
 	if (IS_ERR(map))
 		return dev_err_probe(dev, PTR_ERR(map),
 				     "can't init regmap mmio region\n");
@@ -89,17 +88,14 @@ static int meson_reset_probe(struct platform_device *pdev)
 	return meson_reset_controller_register(dev, map, param);
 }
 
-static struct platform_driver meson_reset_driver = {
+static struct driver meson_reset_driver = {
 	.probe	= meson_reset_probe,
-	.driver = {
-		.name		= "meson_reset",
-		.of_match_table	= meson_reset_dt_ids,
-	},
+	.name		= "meson_reset",
+	.of_match_table	= meson_reset_dt_ids,
 };
-module_platform_driver(meson_reset_driver);
+core_platform_driver(meson_reset_driver);
 
 MODULE_DESCRIPTION("Amlogic Meson Reset Controller driver");
 MODULE_AUTHOR("Neil Armstrong <narmstrong@baylibre.com>");
 MODULE_AUTHOR("Jerome Brunet <jbrunet@baylibre.com>");
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_IMPORT_NS("MESON_RESET");
