@@ -5399,8 +5399,8 @@ static int g12a_clkc_probe(struct device *dev)
 	const struct g12a_clkc_data *g12a_data;
 	int ret;
 
-	// SMA:
-	clkc_data = of_device_get_match_data(&dev);
+	// SMA: DONE
+	clkc_data = of_device_get_match_data(dev);
 	if (!clkc_data)
 		return -EINVAL;
 

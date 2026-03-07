@@ -10,7 +10,7 @@
 #include <linux/clk-provider.h>
 #include <init.h>
 #include <linux/module.h>
-#include <linux/of.h>
+#include <of.h>
 #include <linux/device.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>

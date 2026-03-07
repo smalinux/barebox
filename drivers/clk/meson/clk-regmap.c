@@ -31,8 +31,9 @@ int clk_regmap_init(struct clk_hw *hw)
 	dev = clk_hw_get_dev(hw);
 	if (dev) {
 		clk->map = dev_get_regmap(dev, NULL);
-		if (clk->map)
+		if (!IS_ERR_OR_NULL(clk->map))
 			return 0;
+		clk->map = NULL;
 	}
 
 	/* Move on to early and syscon based controllers */

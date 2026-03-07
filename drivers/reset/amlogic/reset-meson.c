@@ -41,7 +41,16 @@ static const struct meson_reset_param meson_s4_param = {
 	.level_low_reset = true,
 };
 
+/*
+ * SMA REVIEW BUG: t7_param is missing .reset_ops field!
+ * Without it, rcdev.ops will be NULL (set in meson_reset_controller_register),
+ * causing a NULL pointer dereference on any reset operation for T7 SoC.
+ * Note: this same bug exists in the Linux source as of the commit you ported.
+ *
+ * FIX: uncomment the .reset_ops line below:
+ */
 static const struct meson_reset_param t7_param = {
+	// .reset_ops	= &meson_reset_ops,
 	.reset_num      = 224,
 	.reset_offset	= 0x0,
 	.level_offset   = 0x40,

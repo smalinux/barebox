@@ -56,7 +56,7 @@ static int meson_clkc_init(struct device *dev, struct regmap *map)
 		}
 	}
 
-	return of_clk_add_hw_provider(dev, meson_clk_hw_get, (void *)&data->hw_clks);
+	return of_clk_add_hw_provider(dev->of_node, meson_clk_hw_get, (void *)&data->hw_clks);
 }
 
 int meson_clkc_syscon_probe(struct device *dev)
