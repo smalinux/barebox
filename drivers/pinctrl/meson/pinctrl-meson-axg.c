@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-meson-axg.c?id=8a74a53ebbe3e81f58cfc6080bf23f1d01e215f4
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
  * Pin controller and GPIO driver for Amlogic Meson AXG SoC.
@@ -1082,14 +1083,12 @@ static const struct of_device_id meson_axg_pinctrl_dt_match[] = {
 };
 MODULE_DEVICE_TABLE(of, meson_axg_pinctrl_dt_match);
 
-static struct platform_driver meson_axg_pinctrl_driver = {
-	.probe		= meson_pinctrl_probe,
-	.driver = {
-		.name	= "meson-axg-pinctrl",
-		.of_match_table = meson_axg_pinctrl_dt_match,
-	},
+static struct driver meson_axg_pinctrl_driver = {
+	.probe	= meson_pinctrl_probe,
+	.name	= "meson-axg-pinctrl",
+	.of_match_table = meson_axg_pinctrl_dt_match,
 };
 
-module_platform_driver(meson_axg_pinctrl_driver);
+core_platform_driver(meson_axg_pinctrl_driver);
 MODULE_DESCRIPTION("Amlogic Meson AXG pinctrl driver");
 MODULE_LICENSE("Dual BSD/GPL");

@@ -1,3 +1,4 @@
+/* SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-meson.h?id=8a74a53ebbe3e81f58cfc6080bf23f1d01e215f4 */
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Pin controller and GPIO driver for Amlogic Meson SoCs
@@ -5,14 +6,14 @@
  * Copyright (C) 2014 Beniamino Galvani <b.galvani@gmail.com>
  */
 
-#include <linux/gpio/driver.h>
-#include <linux/pinctrl/pinctrl.h>
-#include <linux/platform_device.h>
+#include <common.h>
+#include <driver.h>
+#include <pinctrl.h>
+#include <gpio.h>
+#include <linux/device.h>
 #include <linux/regmap.h>
 #include <linux/types.h>
 #include <linux/module.h>
-
-struct fwnode_handle;
 
 struct meson_pinctrl;
 
@@ -84,6 +85,12 @@ enum meson_pinconf_drv {
 	MESON_PINCONF_DRV_4000UA,
 };
 
+struct pinctrl_pin_desc {
+	unsigned int number;
+	const char *name;
+	//void *drv_data;
+};
+
 /**
  * struct meson bank
  *
@@ -117,15 +124,14 @@ struct meson_pinctrl_data {
 	unsigned int num_funcs;
 	const struct meson_bank *banks;
 	unsigned int num_banks;
-	const struct pinmux_ops *pmx_ops;
+	struct pinctrl_ops *pmx_ops;
 	const void *pmx_data;
 	int (*parse_dt)(struct meson_pinctrl *pc);
 };
 
 struct meson_pinctrl {
 	struct device *dev;
-	struct pinctrl_dev *pcdev;
-	struct pinctrl_desc desc;
+	struct pinctrl_device pcdev;
 	struct meson_pinctrl_data *data;
 	struct regmap *reg_mux;
 	struct regmap *reg_pullen;
@@ -133,7 +139,8 @@ struct meson_pinctrl {
 	struct regmap *reg_gpio;
 	struct regmap *reg_ds;
 	struct gpio_chip chip;
-	struct fwnode_handle *fwnode;
+	// SMA: review this again
+	struct device_node *gpio_np;
 };
 
 #define FUNCTION(fn)							\
@@ -166,17 +173,27 @@ struct meson_pinctrl {
 
 #define MESON_PIN(x) PINCTRL_PIN(x, #x)
 
+static inline struct meson_pinctrl *pinctrl_dev_get_drvdata(struct pinctrl_device *pcdev)
+{
+	return container_of(pcdev, struct meson_pinctrl, pcdev);
+}
+
+static inline void *gpiochip_get_data(struct gpio_chip *gc)
+{
+	return gc->dev->priv;
+}
+
 /* Common pmx functions */
-int meson_pmx_get_funcs_count(struct pinctrl_dev *pcdev);
-const char *meson_pmx_get_func_name(struct pinctrl_dev *pcdev,
+int meson_pmx_get_funcs_count(struct pinctrl_device *pcdev);
+const char *meson_pmx_get_func_name(struct pinctrl_device *pcdev,
 				    unsigned selector);
-int meson_pmx_get_groups(struct pinctrl_dev *pcdev,
+int meson_pmx_get_groups(struct pinctrl_device *pcdev,
 			 unsigned selector,
 			 const char * const **groups,
 			 unsigned * const num_groups);
 
 /* Common probe function */
-int meson_pinctrl_probe(struct platform_device *pdev);
+int meson_pinctrl_probe(struct device *dev);
 /* Common ao groups extra dt parse function for SoCs before g12a  */
 int meson8_aobus_parse_dt_extra(struct meson_pinctrl *pc);
 /* Common extra dt parse function for SoCs like A1  */

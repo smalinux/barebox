@@ -1,3 +1,4 @@
+/* SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-meson-axg-pmx.h?id=8a74a53ebbe3e81f58cfc6080bf23f1d01e215f4 */
 /* SPDX-License-Identifier: (GPL-2.0+ OR MIT) */
 /*
  * Copyright (c) 2017 Baylibre SAS.
@@ -8,6 +9,7 @@
  *
  */
 
+#include "pinctrl.h"
 struct meson_pmx_bank {
 	const char *name;
 	unsigned int first;
@@ -59,4 +61,4 @@ struct meson_pmx_axg_data {
 		},							\
 	}
 
-extern const struct pinmux_ops meson_axg_pmx_ops;
+extern struct pinctrl_ops meson_axg_pmx_ops;

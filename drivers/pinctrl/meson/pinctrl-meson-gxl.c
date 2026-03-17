@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-meson-gxl.c?id=d8c2a9edd181f0cc4a66eec954b3d8f6a1d954a7
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Pin controller and GPIO driver for Amlogic Meson GXL.
@@ -873,13 +874,11 @@ static const struct of_device_id meson_gxl_pinctrl_dt_match[] = {
 };
 MODULE_DEVICE_TABLE(of, meson_gxl_pinctrl_dt_match);
 
-static struct platform_driver meson_gxl_pinctrl_driver = {
+static struct driver meson_gxl_pinctrl_driver = {
 	.probe		= meson_pinctrl_probe,
-	.driver = {
-		.name	= "meson-gxl-pinctrl",
-		.of_match_table = meson_gxl_pinctrl_dt_match,
-	},
+	.name	= "meson-gxl-pinctrl",
+	.of_match_table = meson_gxl_pinctrl_dt_match,
 };
-module_platform_driver(meson_gxl_pinctrl_driver);
+core_platform_driver(meson_gxl_pinctrl_driver);
 MODULE_DESCRIPTION("Amlogic Meson GXL pinctrl driver");
 MODULE_LICENSE("GPL v2");

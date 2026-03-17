@@ -1,3 +1,4 @@
+# SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/Kconfig?id=10dca7cdd431b9fe35f28ea43a7137e2f7aa6d6e
 # SPDX-License-Identifier: GPL-2.0-only
 menuconfig PINCTRL_MESON
 	tristate "Amlogic SoC pinctrl drivers"

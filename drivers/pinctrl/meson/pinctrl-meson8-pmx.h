@@ -1,3 +1,4 @@
+/* SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-meson8-pmx.h?id=3c910ecbdda4227abd145967774f92b1a3341493 */
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * First generation of pinmux driver for Amlogic Meson SoCs
@@ -39,4 +40,4 @@ struct meson8_pmx_data {
 		},							\
 	}
 
-extern const struct pinmux_ops meson8_pmx_ops;
+extern struct pinctrl_ops meson8_pmx_ops;

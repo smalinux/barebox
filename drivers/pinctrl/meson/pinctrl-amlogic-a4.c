@@ -1,30 +1,42 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-amlogic-a4.c?id=5fb024931949f3475260c84a0e4b0997af9c5530
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
 /*
  * Copyright (c) 2024 Amlogic, Inc. All rights reserved.
  * Author: Xianwei Zhao <xianwei.zhao@amlogic.com>
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ * Ignore this file & didn't port yet.
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
  */
 
-#include <linux/err.h>
-#include <linux/gpio/driver.h>
-#include <linux/init.h>
+#include <driver.h>
+#include <gpio.h>
+#include <init.h>
 #include <linux/io.h>
 #include <linux/module.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/platform_device.h>
+#include <of.h>
+#include <of_address.h>
+#include <of_device.h>
+#include <linux/device.h>
 #include <linux/regmap.h>
-#include <linux/seq_file.h>
 #include <linux/slab.h>
-#include <linux/string_helpers.h>
-
-#include <linux/pinctrl/consumer.h>
-#include <linux/pinctrl/pinconf.h>
-#include <linux/pinctrl/pinctrl.h>
-#include <linux/pinctrl/pinmux.h>
+#include <pinctrl.h>
 #include <dt-bindings/pinctrl/amlogic,pinctrl.h>
-
-#include "../core.h"
-#include "../pinconf.h"
 
 #define gpio_chip_to_bank(chip) \
 		container_of(chip, struct aml_gpio_bank, gpio_chip)
@@ -51,7 +63,7 @@ struct aml_pio_control {
 };
 
 /*
- * partial bank(subordinate) pins mux config use other bank(main) mux registgers
+ * partial bank(subordinate) pins mux config use other bank(main) mux registers
  * m_bank_id:	the main bank which pin_id from 0, but register bit not from bit 0
  * m_bit_offs:	bit offset the main bank mux register
  * sid:         start pin_id of subordinate bank
@@ -69,19 +81,6 @@ struct aml_pctl_data {
 	const struct multi_mux *p_mux;
 };
 
-struct aml_pmx_func {
-	const char	*name;
-	const char	**groups;
-	unsigned int	ngroups;
-};
-
-struct aml_pctl_group {
-	const char		*name;
-	unsigned int		npins;
-	unsigned int		*pins;
-	unsigned int		*func;
-};
-
 struct aml_gpio_bank {
 	struct gpio_chip		gpio_chip;
 	struct aml_pio_control		pc;
@@ -96,14 +95,9 @@ struct aml_gpio_bank {
 
 struct aml_pinctrl {
 	struct device			*dev;
-	struct pinctrl_dev		*pctl;
+	struct pinctrl_device		pctl;
 	struct aml_gpio_bank		*banks;
 	int				nbanks;
-	struct aml_pmx_func		*functions;
-	int				nfunctions;
-	struct aml_pctl_group		*groups;
-	int				ngroups;
-
 	const struct aml_pctl_data	*data;
 };
 
@@ -115,13 +109,6 @@ static const unsigned int aml_def_regoffs[AML_NUM_REG] = {
 	3, 4, 2, 1, 0, 7
 };
 
-static const char *aml_bank_name[31] = {
-"GPIOA", "GPIOB", "GPIOC", "GPIOD", "GPIOE", "GPIOF", "GPIOG",
-"GPIOH", "GPIOI", "GPIOJ", "GPIOK", "GPIOL", "GPIOM", "GPION",
-"GPIOO", "GPIOP", "GPIOQ", "GPIOR", "GPIOS", "GPIOT", "GPIOU",
-"GPIOV", "GPIOW", "GPIOX", "GPIOY", "GPIOZ", "GPIODV", "GPIOAO",
-"GPIOCC", "TEST_N", "ANALOG"
-};
 
 static const struct multi_mux multi_mux_s7[] = {
 	{
@@ -156,49 +143,65 @@ static const struct aml_pctl_data s6_priv_data = {
 	.p_mux = multi_mux_s6,
 };
 
-static int aml_pmx_calc_reg_and_offset(struct pinctrl_gpio_range *range,
-				       unsigned int pin, unsigned int *reg,
-				       unsigned int *offset)
+/* Find the bank that owns a global pin_id (bank_id << 8 | local_offset) */
+static struct aml_gpio_bank *aml_find_bank(struct aml_pinctrl *info,
+					   unsigned int pin_id)
 {
-	unsigned int shift;
+	unsigned int bank_id = pin_id >> 8;
+	int i;
 
-	shift = ((pin - range->pin_base) << 2) + *offset;
-	*reg = (shift / 32) * 4;
-	*offset = shift % 32;
-
-	return 0;
+	for (i = 0; i < info->nbanks; i++) {
+		if (info->banks[i].bank_id == bank_id)
+			return &info->banks[i];
+	}
+	return NULL;
 }
 
-static int aml_pctl_set_function(struct aml_pinctrl *info,
-				 struct pinctrl_gpio_range *range,
-				 int pin_id, int func)
+/* Calculate register byte offset and bit position for a pin within a bank */
+static void aml_calc_reg_and_bit(struct aml_gpio_bank *bank,
+				 unsigned int local_pin,
+				 unsigned int reg_type,
+				 unsigned int *reg, unsigned int *bit)
 {
-	struct aml_gpio_bank *bank = gpio_chip_to_bank(range->gc);
-	unsigned int shift;
-	int reg;
-	int i;
-	unsigned int offset = bank->mux_bit_offs;
-	const struct multi_mux *p_mux;
+	*bit = local_pin * aml_bit_strides[reg_type] + bank->pc.bit_offset[reg_type];
+	*reg = (bank->pc.reg_offset[reg_type] + (*bit / 32)) * 4;
+	*bit &= 0x1f;
+}
 
-	/* peculiar mux reg set */
+/* Set pinmux function for a global pin_id */
+static int aml_pctl_set_function(struct aml_pinctrl *info,
+				 unsigned int pin_id, unsigned int func)
+{
+	struct aml_gpio_bank *bank;
+	const struct multi_mux *p_mux;
+	unsigned int shift, reg, offset;
+	unsigned int local_pin;
+	int i;
+
+	bank = aml_find_bank(info, pin_id);
+	if (!bank)
+		return -EINVAL;
+
+	/* peculiar mux reg set: subordinate bank pins use main bank's registers */
 	if (bank->p_mux) {
 		p_mux = bank->p_mux;
 		if (pin_id >= p_mux->sid && pin_id <= p_mux->eid) {
-			bank = NULL;
+			struct aml_gpio_bank *main_bank = NULL;
+
 			for (i = 0; i < info->nbanks; i++) {
 				if (info->banks[i].bank_id == p_mux->m_bank_id) {
-					bank = &info->banks[i];
-						break;
+					main_bank = &info->banks[i];
+					break;
 				}
 			}
 
-			if (!bank || !bank->reg_mux)
+			if (!main_bank || !main_bank->reg_mux)
 				return -EINVAL;
 
 			shift = (pin_id - p_mux->sid) << 2;
 			reg = (shift / 32) * 4;
 			offset = shift % 32;
-			return regmap_update_bits(bank->reg_mux, reg,
+			return regmap_update_bits(main_bank->reg_mux, reg,
 					0xf << offset, (func & 0xf) << offset);
 		}
 	}
@@ -207,266 +210,44 @@ static int aml_pctl_set_function(struct aml_pinctrl *info,
 	if (!bank->reg_mux)
 		return 0;
 
-	aml_pmx_calc_reg_and_offset(range, pin_id, &reg, &offset);
+	local_pin = pin_id - bank->pin_base;
+	shift = (local_pin << 2) + bank->mux_bit_offs;
+	reg = (shift / 32) * 4;
+	offset = shift % 32;
 	return regmap_update_bits(bank->reg_mux, reg,
-			0xf << offset, (func & 0xf) << offset);
+				  0xf << offset, (func & 0xf) << offset);
 }
 
-static int aml_pmx_get_funcs_count(struct pinctrl_dev *pctldev)
-{
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pctldev);
-
-	return info->nfunctions;
-}
-
-static const char *aml_pmx_get_fname(struct pinctrl_dev *pctldev,
-				     unsigned int selector)
-{
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pctldev);
-
-	return info->functions[selector].name;
-}
-
-static int aml_pmx_get_groups(struct pinctrl_dev *pctldev,
-			      unsigned int selector,
-			      const char * const **grps,
-			      unsigned * const ngrps)
-{
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pctldev);
-
-	*grps = info->functions[selector].groups;
-	*ngrps = info->functions[selector].ngroups;
-
-	return 0;
-}
-
-static int aml_pmx_set_mux(struct pinctrl_dev *pctldev, unsigned int fselector,
-			   unsigned int group_id)
-{
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pctldev);
-	struct aml_pctl_group *group = &info->groups[group_id];
-	struct pinctrl_gpio_range *range;
-	int i;
-
-	for (i = 0; i < group->npins; i++) {
-		range =  pinctrl_find_gpio_range_from_pin(pctldev, group->pins[i]);
-		aml_pctl_set_function(info, range, group->pins[i], group->func[i]);
-	}
-
-	return 0;
-}
-
-static int aml_pmx_request_gpio(struct pinctrl_dev *pctldev,
-				struct pinctrl_gpio_range *range,
-				unsigned int pin)
-{
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pctldev);
-
-	return aml_pctl_set_function(info, range, pin, 0);
-}
-
-static const struct pinmux_ops aml_pmx_ops = {
-	.set_mux		= aml_pmx_set_mux,
-	.get_functions_count	= aml_pmx_get_funcs_count,
-	.get_function_name	= aml_pmx_get_fname,
-	.get_function_groups	= aml_pmx_get_groups,
-	.gpio_request_enable	= aml_pmx_request_gpio,
-};
-
-static int aml_calc_reg_and_bit(struct pinctrl_gpio_range *range,
-				unsigned int pin,
-				unsigned int reg_type,
-				unsigned int *reg, unsigned int *bit)
-{
-	struct aml_gpio_bank *bank = gpio_chip_to_bank(range->gc);
-
-	*bit = (pin - range->pin_base) * aml_bit_strides[reg_type]
-		+ bank->pc.bit_offset[reg_type];
-	*reg = (bank->pc.reg_offset[reg_type] + (*bit / 32)) * 4;
-	*bit &= 0x1f;
-
-	return 0;
-}
-
-static int aml_pinconf_get_pull(struct aml_pinctrl *info, unsigned int pin)
-{
-	struct pinctrl_gpio_range *range =
-			 pinctrl_find_gpio_range_from_pin(info->pctl, pin);
-	struct aml_gpio_bank *bank = gpio_chip_to_bank(range->gc);
-	unsigned int reg, bit, val;
-	int ret, conf;
-
-	aml_calc_reg_and_bit(range, pin, AML_REG_PULLEN, &reg, &bit);
-
-	ret = regmap_read(bank->reg_gpio, reg, &val);
-	if (ret)
-		return ret;
-
-	if (!(val & BIT(bit))) {
-		conf = PIN_CONFIG_BIAS_DISABLE;
-	} else {
-		aml_calc_reg_and_bit(range, pin, AML_REG_PULL, &reg, &bit);
-
-		ret = regmap_read(bank->reg_gpio, reg, &val);
-		if (ret)
-			return ret;
-
-		if (val & BIT(bit))
-			conf = PIN_CONFIG_BIAS_PULL_UP;
-		else
-			conf = PIN_CONFIG_BIAS_PULL_DOWN;
-	}
-
-	return conf;
-}
-
-static int aml_pinconf_get_drive_strength(struct aml_pinctrl *info,
-					  unsigned int pin,
-					  u16 *drive_strength_ua)
-{
-	struct pinctrl_gpio_range *range =
-			 pinctrl_find_gpio_range_from_pin(info->pctl, pin);
-	struct aml_gpio_bank *bank = gpio_chip_to_bank(range->gc);
-	unsigned int reg, bit;
-	unsigned int val;
-	int ret;
-
-	if (!bank->reg_ds)
-		return -EOPNOTSUPP;
-
-	aml_calc_reg_and_bit(range, pin, AML_REG_DS, &reg, &bit);
-	ret = regmap_read(bank->reg_ds, reg, &val);
-	if (ret)
-		return ret;
-
-	switch ((val >> bit) & 0x3) {
-	case PINCONF_DRV_500UA:
-		*drive_strength_ua = 500;
-		break;
-	case PINCONF_DRV_2500UA:
-		*drive_strength_ua = 2500;
-		break;
-	case PINCONF_DRV_3000UA:
-		*drive_strength_ua = 3000;
-		break;
-	case PINCONF_DRV_4000UA:
-		*drive_strength_ua = 4000;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static int aml_pinconf_get_gpio_bit(struct aml_pinctrl *info,
-				    unsigned int pin,
-				    unsigned int reg_type)
-{
-	struct pinctrl_gpio_range *range =
-			 pinctrl_find_gpio_range_from_pin(info->pctl, pin);
-	struct aml_gpio_bank *bank = gpio_chip_to_bank(range->gc);
-	unsigned int reg, bit, val;
-	int ret;
-
-	aml_calc_reg_and_bit(range, pin, reg_type, &reg, &bit);
-	ret = regmap_read(bank->reg_gpio, reg, &val);
-	if (ret)
-		return ret;
-
-	return BIT(bit) & val ? 1 : 0;
-}
-
-static int aml_pinconf_get_output(struct aml_pinctrl *info,
-				  unsigned int pin)
-{
-	int ret = aml_pinconf_get_gpio_bit(info, pin, AML_REG_DIR);
-
-	if (ret < 0)
-		return ret;
-
-	return !ret;
-}
-
-static int aml_pinconf_get_drive(struct aml_pinctrl *info,
-				 unsigned int pin)
-{
-	return aml_pinconf_get_gpio_bit(info, pin, AML_REG_OUT);
-}
-
-static int aml_pinconf_get(struct pinctrl_dev *pcdev, unsigned int pin,
-			   unsigned long *config)
-{
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pcdev);
-	enum pin_config_param param = pinconf_to_config_param(*config);
-	u16 arg;
-	int ret;
-
-	switch (param) {
-	case PIN_CONFIG_BIAS_DISABLE:
-	case PIN_CONFIG_BIAS_PULL_DOWN:
-	case PIN_CONFIG_BIAS_PULL_UP:
-		if (aml_pinconf_get_pull(info, pin) == param)
-			arg = 1;
-		else
-			return -EINVAL;
-		break;
-	case PIN_CONFIG_DRIVE_STRENGTH_UA:
-		ret = aml_pinconf_get_drive_strength(info, pin, &arg);
-		if (ret)
-			return ret;
-		break;
-	case PIN_CONFIG_OUTPUT_ENABLE:
-		ret = aml_pinconf_get_output(info, pin);
-		if (ret <= 0)
-			return -EINVAL;
-		arg = 1;
-		break;
-	case PIN_CONFIG_LEVEL:
-		ret = aml_pinconf_get_output(info, pin);
-		if (ret <= 0)
-			return -EINVAL;
-
-		ret = aml_pinconf_get_drive(info, pin);
-		if (ret < 0)
-			return -EINVAL;
-
-		arg = ret;
-		break;
-
-	default:
-		return -ENOTSUPP;
-	}
-
-	*config = pinconf_to_config_packed(param, arg);
-	dev_dbg(info->dev, "pinconf for pin %u is %lu\n", pin, *config);
-
-	return 0;
-}
+/* --- Pin configuration helpers --- */
 
 static int aml_pinconf_disable_bias(struct aml_pinctrl *info,
-				    unsigned int pin)
+				    unsigned int pin_id)
 {
-	struct pinctrl_gpio_range *range =
-			 pinctrl_find_gpio_range_from_pin(info->pctl, pin);
-	struct aml_gpio_bank *bank = gpio_chip_to_bank(range->gc);
+	struct aml_gpio_bank *bank;
 	unsigned int reg, bit = 0;
 
-	aml_calc_reg_and_bit(range, pin, AML_REG_PULLEN, &reg, &bit);
+	bank = aml_find_bank(info, pin_id);
+	if (!bank)
+		return -EINVAL;
 
+	aml_calc_reg_and_bit(bank, pin_id - bank->pin_base,
+			     AML_REG_PULLEN, &reg, &bit);
 	return regmap_update_bits(bank->reg_gpio, reg, BIT(bit), 0);
 }
 
-static int aml_pinconf_enable_bias(struct aml_pinctrl *info, unsigned int pin,
-				   bool pull_up)
+static int aml_pinconf_enable_bias(struct aml_pinctrl *info,
+				   unsigned int pin_id, bool pull_up)
 {
-	struct pinctrl_gpio_range *range =
-			 pinctrl_find_gpio_range_from_pin(info->pctl, pin);
-	struct aml_gpio_bank *bank = gpio_chip_to_bank(range->gc);
+	struct aml_gpio_bank *bank;
 	unsigned int reg, bit, val = 0;
 	int ret;
 
-	aml_calc_reg_and_bit(range, pin, AML_REG_PULL, &reg, &bit);
+	bank = aml_find_bank(info, pin_id);
+	if (!bank)
+		return -EINVAL;
+
+	aml_calc_reg_and_bit(bank, pin_id - bank->pin_base,
+			     AML_REG_PULL, &reg, &bit);
 	if (pull_up)
 		val = BIT(bit);
 
@@ -474,25 +255,29 @@ static int aml_pinconf_enable_bias(struct aml_pinctrl *info, unsigned int pin,
 	if (ret)
 		return ret;
 
-	aml_calc_reg_and_bit(range, pin, AML_REG_PULLEN, &reg, &bit);
+	aml_calc_reg_and_bit(bank, pin_id - bank->pin_base,
+			     AML_REG_PULLEN, &reg, &bit);
 	return regmap_update_bits(bank->reg_gpio, reg, BIT(bit), BIT(bit));
 }
 
 static int aml_pinconf_set_drive_strength(struct aml_pinctrl *info,
-					  unsigned int pin,
-					  u16 drive_strength_ua)
+					  unsigned int pin_id,
+					  u32 drive_strength_ua)
 {
-	struct pinctrl_gpio_range *range =
-			 pinctrl_find_gpio_range_from_pin(info->pctl, pin);
-	struct aml_gpio_bank *bank = gpio_chip_to_bank(range->gc);
+	struct aml_gpio_bank *bank;
 	unsigned int reg, bit, ds_val;
+
+	bank = aml_find_bank(info, pin_id);
+	if (!bank)
+		return -EINVAL;
 
 	if (!bank->reg_ds) {
 		dev_err(info->dev, "drive-strength not supported\n");
 		return -EOPNOTSUPP;
 	}
 
-	aml_calc_reg_and_bit(range, pin, AML_REG_DS, &reg, &bit);
+	aml_calc_reg_and_bit(bank, pin_id - bank->pin_base,
+			     AML_REG_DS, &reg, &bit);
 
 	if (drive_strength_ua <= 500) {
 		ds_val = PINCONF_DRV_500UA;
@@ -505,100 +290,89 @@ static int aml_pinconf_set_drive_strength(struct aml_pinctrl *info,
 	} else {
 		dev_warn_once(info->dev,
 			      "pin %u: invalid drive-strength : %d , default to 4mA\n",
-			      pin, drive_strength_ua);
+			      pin_id, drive_strength_ua);
 		ds_val = PINCONF_DRV_4000UA;
 	}
 
 	return regmap_update_bits(bank->reg_ds, reg, 0x3 << bit, ds_val << bit);
 }
 
-static int aml_pinconf_set_gpio_bit(struct aml_pinctrl *info,
-				    unsigned int pin,
-				    unsigned int reg_type,
-				    bool arg)
+/* Apply optional bias/drive-strength config from a DT node to a single pin */
+static void aml_apply_pin_config(struct aml_pinctrl *info,
+				 unsigned int pin_id,
+				 struct device_node *np)
 {
-	struct pinctrl_gpio_range *range =
-			 pinctrl_find_gpio_range_from_pin(info->pctl, pin);
-	struct aml_gpio_bank *bank = gpio_chip_to_bank(range->gc);
-	unsigned int reg, bit;
+	u32 ua;
 
-	aml_calc_reg_and_bit(range, pin, reg_type, &reg, &bit);
-	return regmap_update_bits(bank->reg_gpio, reg, BIT(bit),
-				  arg ? BIT(bit) : 0);
+	if (of_find_property(np, "bias-disable", NULL))
+		aml_pinconf_disable_bias(info, pin_id);
+	else if (of_find_property(np, "bias-pull-up", NULL))
+		aml_pinconf_enable_bias(info, pin_id, true);
+	else if (of_find_property(np, "bias-pull-down", NULL))
+		aml_pinconf_enable_bias(info, pin_id, false);
+
+	if (!of_property_read_u32(np, "drive-strength-microamp", &ua))
+		aml_pinconf_set_drive_strength(info, pin_id, ua);
 }
 
-static int aml_pinconf_set_output(struct aml_pinctrl *info,
-				  unsigned int pin,
-				  bool out)
+/*
+ * Apply mux (and optional pin config) from a node that carries a "pinmux"
+ * property.  Each entry is encoded as AML_PINMUX(bank, offset, mode):
+ *   bits [31:8] = global pin_id = (bank_id << 8) + local_offset
+ *   bits  [7:0] = mux function value
+ */
+static int aml_apply_pinmux_node(struct aml_pinctrl *info,
+				 struct device_node *np)
 {
-	return aml_pinconf_set_gpio_bit(info, pin, AML_REG_DIR, !out);
+	const __be32 *list;
+	int size, i, ret;
+
+	list = of_get_property(np, "pinmux", &size);
+	if (!list)
+		return 0;
+
+	size /= sizeof(u32);
+	for (i = 0; i < size; i++) {
+		u32 val = be32_to_cpup(list + i);
+		unsigned int pin_id = val >> 8;
+		unsigned int func   = val & 0xff;
+
+		ret = aml_pctl_set_function(info, pin_id, func);
+		if (ret) {
+			dev_err(info->dev,
+				"failed to set mux for pin 0x%x func %u\n",
+				pin_id, func);
+			return ret;
+		}
+		aml_apply_pin_config(info, pin_id, np);
+	}
+
+	return 0;
 }
 
-static int aml_pinconf_set_drive(struct aml_pinctrl *info,
-				 unsigned int pin,
-				 bool high)
+/*
+ * barebox pinctrl set_state callback.
+ *
+ * np is the pin-state node referenced by the device (e.g. pinctrl-0 = <&node>).
+ * For the Amlogic a4 binding this node is a function node whose children carry
+ * "pinmux" properties (nested format).  Flat format (pinmux directly on np) is
+ * also supported.
+ */
+static int aml_pctl_set_state(struct pinctrl_device *pdev,
+			      struct device_node *np)
 {
-	return aml_pinconf_set_gpio_bit(info, pin, AML_REG_OUT, high);
-}
-
-static int aml_pinconf_set_output_drive(struct aml_pinctrl *info,
-					unsigned int pin,
-					bool high)
-{
+	struct aml_pinctrl *info =
+		container_of(pdev, struct aml_pinctrl, pctl);
+	struct device_node *child;
 	int ret;
 
-	ret = aml_pinconf_set_output(info, pin, true);
-	if (ret)
-		return ret;
+	/* flat format: the state node itself carries "pinmux" */
+	if (of_find_property(np, "pinmux", NULL))
+		return aml_apply_pinmux_node(info, np);
 
-	return aml_pinconf_set_drive(info, pin, high);
-}
-
-static int aml_pinconf_set(struct pinctrl_dev *pcdev, unsigned int pin,
-			   unsigned long *configs, unsigned int num_configs)
-{
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pcdev);
-	enum pin_config_param param;
-	unsigned int arg = 0;
-	int i, ret;
-
-	for (i = 0; i < num_configs; i++) {
-		param = pinconf_to_config_param(configs[i]);
-
-		switch (param) {
-		case PIN_CONFIG_DRIVE_STRENGTH_UA:
-		case PIN_CONFIG_OUTPUT_ENABLE:
-		case PIN_CONFIG_LEVEL:
-			arg = pinconf_to_config_argument(configs[i]);
-			break;
-
-		default:
-			break;
-		}
-
-		switch (param) {
-		case PIN_CONFIG_BIAS_DISABLE:
-			ret = aml_pinconf_disable_bias(info, pin);
-			break;
-		case PIN_CONFIG_BIAS_PULL_UP:
-			ret = aml_pinconf_enable_bias(info, pin, true);
-			break;
-		case PIN_CONFIG_BIAS_PULL_DOWN:
-			ret = aml_pinconf_enable_bias(info, pin, false);
-			break;
-		case PIN_CONFIG_DRIVE_STRENGTH_UA:
-			ret = aml_pinconf_set_drive_strength(info, pin, arg);
-			break;
-		case PIN_CONFIG_OUTPUT_ENABLE:
-			ret = aml_pinconf_set_output(info, pin, arg);
-			break;
-		case PIN_CONFIG_LEVEL:
-			ret = aml_pinconf_set_output_drive(info, pin, arg);
-			break;
-		default:
-			ret = -ENOTSUPP;
-		}
-
+	/* nested format: traverse child nodes */
+	for_each_child_of_node(np, child) {
+		ret = aml_apply_pinmux_node(info, child);
 		if (ret)
 			return ret;
 	}
@@ -606,295 +380,82 @@ static int aml_pinconf_set(struct pinctrl_dev *pcdev, unsigned int pin,
 	return 0;
 }
 
-static int aml_pinconf_group_set(struct pinctrl_dev *pcdev,
-				 unsigned int num_group,
-				 unsigned long *configs,
-				 unsigned int num_configs)
-{
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pcdev);
-	int i;
-
-	for (i = 0; i < info->groups[num_group].npins; i++) {
-		aml_pinconf_set(pcdev, info->groups[num_group].pins[i], configs,
-				num_configs);
-	}
-
-	return 0;
-}
-
-static int aml_pinconf_group_get(struct pinctrl_dev *pcdev,
-				 unsigned int group, unsigned long *config)
-{
-	return -EOPNOTSUPP;
-}
-
-static const struct pinconf_ops aml_pinconf_ops = {
-	.pin_config_get		= aml_pinconf_get,
-	.pin_config_set		= aml_pinconf_set,
-	.pin_config_group_get	= aml_pinconf_group_get,
-	.pin_config_group_set	= aml_pinconf_group_set,
-	.is_generic		= true,
+static struct pinctrl_ops aml_pctrl_ops = {
+	.set_state = aml_pctl_set_state,
 };
 
-static int aml_get_groups_count(struct pinctrl_dev *pctldev)
+/* --- GPIO chip operations --- */
+
+static void aml_gpio_set(struct gpio_chip *chip, unsigned int gpio, int value)
 {
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pctldev);
-
-	return info->ngroups;
-}
-
-static const char *aml_get_group_name(struct pinctrl_dev *pctldev,
-				      unsigned int selector)
-{
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pctldev);
-
-	return info->groups[selector].name;
-}
-
-static int aml_get_group_pins(struct pinctrl_dev *pctldev,
-			      unsigned int selector, const unsigned int **pins,
-			      unsigned int *npins)
-{
-	struct aml_pinctrl *info = pinctrl_dev_get_drvdata(pctldev);
-
-	if (selector >= info->ngroups)
-		return -EINVAL;
-
-	*pins = info->groups[selector].pins;
-	*npins = info->groups[selector].npins;
-
-	return 0;
-}
-
-static void aml_pin_dbg_show(struct pinctrl_dev *pcdev, struct seq_file *s,
-			     unsigned int offset)
-{
-	seq_printf(s, " %s", dev_name(pcdev->dev));
-}
-
-static const struct pinctrl_ops aml_pctrl_ops = {
-	.get_groups_count	= aml_get_groups_count,
-	.get_group_name		= aml_get_group_name,
-	.get_group_pins		= aml_get_group_pins,
-	.dt_node_to_map		= pinconf_generic_dt_node_to_map_pinmux,
-	.dt_free_map		= pinconf_generic_dt_free_map,
-	.pin_dbg_show		= aml_pin_dbg_show,
-};
-
-static int aml_pctl_parse_functions(struct device_node *np,
-				    struct aml_pinctrl *info, u32 index,
-				    int *grp_index)
-{
-	struct device *dev = info->dev;
-	struct aml_pmx_func *func;
-	struct aml_pctl_group *grp;
-	int ret, i;
-
-	func = &info->functions[index];
-	func->name = np->name;
-	func->ngroups = of_get_child_count(np);
-	if (func->ngroups == 0)
-		return dev_err_probe(dev, -EINVAL, "No groups defined\n");
-
-	func->groups = devm_kcalloc(dev, func->ngroups, sizeof(*func->groups), GFP_KERNEL);
-	if (!func->groups)
-		return -ENOMEM;
-
-	i = 0;
-	for_each_child_of_node_scoped(np, child) {
-		func->groups[i++] = child->name;
-		grp = &info->groups[*grp_index];
-		grp->name = child->name;
-		*grp_index += 1;
-		ret = pinconf_generic_parse_dt_pinmux(child, dev, &grp->pins,
-						      &grp->func, &grp->npins);
-		if (ret) {
-			dev_err(dev, "function :%s, groups:%s fail\n", func->name, child->name);
-			return ret;
-		}
-	}
-	dev_dbg(dev, "Function[%d\t name:%s,\tgroups:%d]\n", index, func->name, func->ngroups);
-
-	return 0;
-}
-
-static u32 aml_bank_pins(struct device_node *np)
-{
-	struct of_phandle_args of_args;
-
-	if (of_parse_phandle_with_fixed_args(np, "gpio-ranges", 3,
-					     0, &of_args))
-		return 0;
-	else
-		return of_args.args[2];
-}
-
-static int aml_bank_number(struct device_node *np)
-{
-	struct of_phandle_args of_args;
-
-	if (of_parse_phandle_with_fixed_args(np, "gpio-ranges", 3,
-					     0, &of_args))
-		return -EINVAL;
-	else
-		return of_args.args[1] >> 8;
-}
-
-static unsigned int aml_count_pins(struct device_node *np)
-{
-	struct device_node *child;
-	unsigned int pins = 0;
-
-	for_each_child_of_node(np, child) {
-		if (of_property_read_bool(child, "gpio-controller"))
-			pins += aml_bank_pins(child);
-	}
-
-	return pins;
-}
-
-/*
- * A pinctrl device contains two types of nodes. The one named GPIO
- * bank which includes gpio-controller property. The other one named
- * function which includes one or more pin groups. The pin group
- * include pinmux property(global index in pinctrl dev, and mux vlaue
- * in mux reg) and pin configuration properties.
- */
-static void aml_pctl_dt_child_count(struct aml_pinctrl *info,
-				    struct device_node *np)
-{
-	struct device_node *child;
-
-	for_each_child_of_node(np, child) {
-		if (of_property_read_bool(child, "gpio-controller")) {
-			info->nbanks++;
-		} else {
-			info->nfunctions++;
-			info->ngroups += of_get_child_count(child);
-		}
-	}
-}
-
-static struct regmap *aml_map_resource(struct device *dev, unsigned int id,
-				       struct device_node *node, char *name)
-{
-	struct resource res;
-	void __iomem *base;
-	int i;
-
-	struct regmap_config aml_regmap_config = {
-		.reg_bits = 32,
-		.val_bits = 32,
-		.reg_stride = 4,
-	};
-
-	i = of_property_match_string(node, "reg-names", name);
-	if (i < 0)
-		return NULL;
-	if (of_address_to_resource(node, i, &res))
-		return NULL;
-	base = devm_ioremap_resource(dev, &res);
-	if (IS_ERR(base))
-		return ERR_CAST(base);
-
-	aml_regmap_config.max_register = resource_size(&res) - 4;
-	aml_regmap_config.name = devm_kasprintf(dev, GFP_KERNEL,
-						"%s-%s", aml_bank_name[id], name);
-	if (!aml_regmap_config.name)
-		return ERR_PTR(-ENOMEM);
-
-	return devm_regmap_init_mmio(dev, base, &aml_regmap_config);
-}
-
-static inline int aml_gpio_calc_reg_and_bit(struct aml_gpio_bank *bank,
-					    unsigned int reg_type,
-					    unsigned int gpio,
-					    unsigned int *reg,
-					    unsigned int *bit)
-{
-	*bit = gpio * aml_bit_strides[reg_type] + bank->pc.bit_offset[reg_type];
-	*reg = (bank->pc.reg_offset[reg_type] + (*bit / 32)) * 4;
-	*bit &= 0x1f;
-
-	return 0;
-}
-
-static int aml_gpio_get_direction(struct gpio_chip *chip, unsigned int gpio)
-{
-	struct aml_gpio_bank *bank = gpiochip_get_data(chip);
-	unsigned int bit, reg, val;
-	int ret;
-
-	aml_gpio_calc_reg_and_bit(bank, AML_REG_DIR, gpio, &reg, &bit);
-
-	ret = regmap_read(bank->reg_gpio, reg, &val);
-	if (ret)
-		return ret;
-
-	return BIT(bit) & val ? GPIO_LINE_DIRECTION_IN : GPIO_LINE_DIRECTION_OUT;
-}
-
-static int aml_gpio_direction_input(struct gpio_chip *chip, unsigned int gpio)
-{
-	struct aml_gpio_bank *bank = gpiochip_get_data(chip);
+	struct aml_gpio_bank *bank = gpio_chip_to_bank(chip);
 	unsigned int bit, reg;
 
-	aml_gpio_calc_reg_and_bit(bank, AML_REG_DIR, gpio, &reg, &bit);
-
-	return regmap_update_bits(bank->reg_gpio, reg, BIT(bit), BIT(bit));
-}
-
-static int aml_gpio_direction_output(struct gpio_chip *chip, unsigned int gpio,
-				     int value)
-{
-	struct aml_gpio_bank *bank = gpiochip_get_data(chip);
-	unsigned int bit, reg;
-	int ret;
-
-	aml_gpio_calc_reg_and_bit(bank, AML_REG_DIR, gpio, &reg, &bit);
-	ret = regmap_update_bits(bank->reg_gpio, reg, BIT(bit), 0);
-	if (ret < 0)
-		return ret;
-
-	aml_gpio_calc_reg_and_bit(bank, AML_REG_OUT, gpio, &reg, &bit);
-
-	return regmap_update_bits(bank->reg_gpio, reg, BIT(bit),
-				  value ? BIT(bit) : 0);
-}
-
-static int aml_gpio_set(struct gpio_chip *chip, unsigned int gpio, int value)
-{
-	struct aml_gpio_bank *bank = gpiochip_get_data(chip);
-	unsigned int bit, reg;
-
-	aml_gpio_calc_reg_and_bit(bank, AML_REG_OUT, gpio, &reg, &bit);
-
-	return regmap_update_bits(bank->reg_gpio, reg, BIT(bit),
-				  value ? BIT(bit) : 0);
+	aml_calc_reg_and_bit(bank, gpio, AML_REG_OUT, &reg, &bit);
+	regmap_update_bits(bank->reg_gpio, reg, BIT(bit),
+			   value ? BIT(bit) : 0);
 }
 
 static int aml_gpio_get(struct gpio_chip *chip, unsigned int gpio)
 {
-	struct aml_gpio_bank *bank = gpiochip_get_data(chip);
+	struct aml_gpio_bank *bank = gpio_chip_to_bank(chip);
 	unsigned int reg, bit, val;
 
-	aml_gpio_calc_reg_and_bit(bank, AML_REG_IN, gpio, &reg, &bit);
+	aml_calc_reg_and_bit(bank, gpio, AML_REG_IN, &reg, &bit);
 	regmap_read(bank->reg_gpio, reg, &val);
 
 	return !!(val & BIT(bit));
 }
 
-static const struct gpio_chip aml_gpio_template = {
-	.request		= gpiochip_generic_request,
-	.free			= gpiochip_generic_free,
-	.set_config		= gpiochip_generic_config,
-	.set			= aml_gpio_set,
-	.get			= aml_gpio_get,
-	.direction_input	= aml_gpio_direction_input,
-	.direction_output	= aml_gpio_direction_output,
-	.get_direction		= aml_gpio_get_direction,
-	.can_sleep		= false,
+static int aml_gpio_direction_input(struct gpio_chip *chip, unsigned int gpio)
+{
+	struct aml_gpio_bank *bank = gpio_chip_to_bank(chip);
+	unsigned int bit, reg;
+
+	aml_calc_reg_and_bit(bank, gpio, AML_REG_DIR, &reg, &bit);
+	return regmap_update_bits(bank->reg_gpio, reg, BIT(bit), BIT(bit));
+}
+
+static int aml_gpio_direction_output(struct gpio_chip *chip,
+				     unsigned int gpio, int value)
+{
+	struct aml_gpio_bank *bank = gpio_chip_to_bank(chip);
+	unsigned int bit, reg;
+	int ret;
+
+	aml_calc_reg_and_bit(bank, gpio, AML_REG_DIR, &reg, &bit);
+	ret = regmap_update_bits(bank->reg_gpio, reg, BIT(bit), 0);
+	if (ret < 0)
+		return ret;
+
+	aml_calc_reg_and_bit(bank, gpio, AML_REG_OUT, &reg, &bit);
+	return regmap_update_bits(bank->reg_gpio, reg, BIT(bit),
+				  value ? BIT(bit) : 0);
+}
+
+static int aml_gpio_get_direction(struct gpio_chip *chip, unsigned int gpio)
+{
+	struct aml_gpio_bank *bank = gpio_chip_to_bank(chip);
+	unsigned int bit, reg, val;
+	int ret;
+
+	aml_calc_reg_and_bit(bank, gpio, AML_REG_DIR, &reg, &bit);
+	ret = regmap_read(bank->reg_gpio, reg, &val);
+	if (ret)
+		return ret;
+
+	return BIT(bit) & val ? GPIOF_DIR_IN : GPIOF_DIR_OUT;
+}
+
+static struct gpio_ops aml_gpio_ops = {
+	.direction_input  = aml_gpio_direction_input,
+	.direction_output = aml_gpio_direction_output,
+	.get_direction    = aml_gpio_get_direction,
+	.get              = aml_gpio_get,
+	.set              = aml_gpio_set,
 };
+
+/* --- Bank initialisation helpers --- */
 
 static void init_bank_register_bit(struct aml_pinctrl *info,
 				   struct aml_gpio_bank *bank)
@@ -925,12 +486,62 @@ static void init_bank_register_bit(struct aml_pinctrl *info,
 	}
 }
 
+static u32 aml_bank_pins(struct device_node *np)
+{
+	struct of_phandle_args of_args;
+
+	if (__of_parse_phandle_with_args(np, "gpio-ranges", NULL, 3,
+					 0, &of_args))
+		return 0;
+	return of_args.args[2];
+}
+
+static int aml_bank_number(struct device_node *np)
+{
+	struct of_phandle_args of_args;
+
+	if (__of_parse_phandle_with_args(np, "gpio-ranges", NULL, 3,
+					 0, &of_args))
+		return -EINVAL;
+	return of_args.args[1] >> 8;
+}
+
+static struct regmap *aml_map_resource(struct device *dev,
+				       struct device_node *node, char *name)
+{
+	struct resource res;
+	void __iomem *base;
+	int i;
+
+	struct regmap_config aml_regmap_config = {
+		.reg_bits = 32,
+		.val_bits = 32,
+		.reg_stride = 4,
+	};
+
+	i = of_property_match_string(node, "reg-names", name);
+	if (i < 0)
+		return NULL;
+	if (of_address_to_resource(node, i, &res))
+		return NULL;
+
+	base = devm_ioremap(dev, res.start, resource_size(&res));
+	if (IS_ERR(base))
+		return ERR_CAST(base);
+
+	aml_regmap_config.max_register = resource_size(&res) - 4;
+	aml_regmap_config.name = name;
+
+	return regmap_init_mmio(dev, base, &aml_regmap_config);
+}
+
 static int aml_gpiolib_register_bank(struct aml_pinctrl *info,
 				     int bank_nr, struct device_node *np)
 {
 	struct aml_gpio_bank *bank = &info->banks[bank_nr];
 	struct device *dev = info->dev;
-	int ret = 0;
+	struct device *gpio_dev;
+	int ret;
 
 	ret = aml_bank_number(np);
 	if (ret < 0) {
@@ -939,150 +550,97 @@ static int aml_gpiolib_register_bank(struct aml_pinctrl *info,
 	}
 	bank->bank_id = ret;
 
-	bank->reg_mux = aml_map_resource(dev, bank->bank_id, np, "mux");
+	bank->reg_mux = aml_map_resource(dev, np, "mux");
 	if (IS_ERR_OR_NULL(bank->reg_mux)) {
 		if (bank->bank_id == AMLOGIC_GPIO_TEST_N ||
 		    bank->bank_id == AMLOGIC_GPIO_ANALOG)
 			bank->reg_mux = NULL;
 		else
-			return dev_err_probe(dev, bank->reg_mux ? PTR_ERR(bank->reg_mux) : -ENOENT,
+			return dev_err_probe(dev,
+					     bank->reg_mux ? PTR_ERR(bank->reg_mux) : -ENOENT,
 					     "mux registers not found\n");
 	}
 
-	bank->reg_gpio = aml_map_resource(dev, bank->bank_id, np, "gpio");
+	bank->reg_gpio = aml_map_resource(dev, np, "gpio");
 	if (IS_ERR_OR_NULL(bank->reg_gpio))
-		return dev_err_probe(dev, bank->reg_gpio ? PTR_ERR(bank->reg_gpio) : -ENOENT,
+		return dev_err_probe(dev,
+				     bank->reg_gpio ? PTR_ERR(bank->reg_gpio) : -ENOENT,
 				     "gpio registers not found\n");
 
-	bank->reg_ds = aml_map_resource(dev, bank->bank_id, np, "ds");
+	bank->reg_ds = aml_map_resource(dev, np, "ds");
 	if (IS_ERR_OR_NULL(bank->reg_ds)) {
-		dev_dbg(info->dev, "ds registers not found - skipping\n");
+		dev_dbg(dev, "ds registers not found - skipping\n");
 		bank->reg_ds = bank->reg_gpio;
 	}
 
-	bank->gpio_chip = aml_gpio_template;
-	bank->gpio_chip.base = -1;
-	bank->gpio_chip.ngpio = aml_bank_pins(np);
-	bank->gpio_chip.fwnode = of_fwnode_handle(np);
-	bank->gpio_chip.parent = dev;
-
 	init_bank_register_bit(info, bank);
-	bank->gpio_chip.label = aml_bank_name[bank->bank_id];
-
 	bank->pin_base = bank->bank_id << 8;
 
-	return 0;
-}
-
-static int aml_pctl_probe_dt(struct platform_device *pdev,
-			     struct pinctrl_desc *pctl_desc,
-			     struct aml_pinctrl *info)
-{
-	struct device *dev = &pdev->dev;
-	struct pinctrl_pin_desc *pdesc;
-	struct device_node *np = dev->of_node;
-	int grp_index = 0;
-	int i = 0, j = 0, k = 0, bank;
-	int ret = 0;
-
-	aml_pctl_dt_child_count(info, np);
-	if (!info->nbanks)
-		return dev_err_probe(dev, -EINVAL, "you need at least one gpio bank\n");
-
-	dev_dbg(dev, "nbanks = %d\n", info->nbanks);
-	dev_dbg(dev, "nfunctions = %d\n", info->nfunctions);
-	dev_dbg(dev, "ngroups = %d\n", info->ngroups);
-
-	info->functions = devm_kcalloc(dev, info->nfunctions, sizeof(*info->functions), GFP_KERNEL);
-
-	info->groups = devm_kcalloc(dev, info->ngroups, sizeof(*info->groups), GFP_KERNEL);
-
-	info->banks = devm_kcalloc(dev, info->nbanks, sizeof(*info->banks), GFP_KERNEL);
-
-	if (!info->functions || !info->groups || !info->banks)
-		return -ENOMEM;
-
-	info->data = (struct aml_pctl_data *)of_device_get_match_data(dev);
-
-	pctl_desc->npins = aml_count_pins(np);
-
-	pdesc =	devm_kcalloc(dev, pctl_desc->npins, sizeof(*pdesc), GFP_KERNEL);
-	if (!pdesc)
-		return -ENOMEM;
-
-	pctl_desc->pins = pdesc;
-
-	bank = 0;
-	for_each_child_of_node_scoped(np, child) {
-		if (of_property_read_bool(child, "gpio-controller")) {
-			const char *bank_name = NULL;
-			char **pin_names;
-
-			ret = aml_gpiolib_register_bank(info, bank, child);
-			if (ret)
-				return ret;
-
-			k = info->banks[bank].pin_base;
-			bank_name = info->banks[bank].gpio_chip.label;
-
-			pin_names = devm_kasprintf_strarray(dev, bank_name,
-							    info->banks[bank].gpio_chip.ngpio);
-			if (IS_ERR(pin_names))
-				return PTR_ERR(pin_names);
-
-			for (j = 0; j < info->banks[bank].gpio_chip.ngpio; j++, k++) {
-				pdesc->number = k;
-				pdesc->name = pin_names[j];
-				pdesc++;
-			}
-			bank++;
-		} else {
-			ret = aml_pctl_parse_functions(child, info,
-						       i++, &grp_index);
-			if (ret)
-				return ret;
-		}
+	gpio_dev = of_platform_device_create(np, dev);
+	if (!gpio_dev) {
+		dev_err(dev, "failed to create gpio child device\n");
+		return -ENODEV;
 	}
+	of_platform_device_dummy_drv(gpio_dev);
+
+	bank->gpio_chip.dev   = gpio_dev;
+	bank->gpio_chip.ops   = &aml_gpio_ops;
+	bank->gpio_chip.base  = -1;
+	bank->gpio_chip.ngpio = aml_bank_pins(np);
+
+	ret = gpiochip_add(&bank->gpio_chip);
+	if (ret)
+		return dev_err_probe(dev, ret,
+				     "Failed to add gpiochip for bank %u\n",
+				     bank->bank_id);
 
 	return 0;
 }
 
-static int aml_pctl_probe(struct platform_device *pdev)
+static int aml_pctl_probe(struct device *dev)
 {
-	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node;
+	struct device_node *child;
 	struct aml_pinctrl *info;
-	struct pinctrl_desc *pctl_desc;
-	int ret, i;
-
-	pctl_desc = devm_kzalloc(dev, sizeof(*pctl_desc), GFP_KERNEL);
-	if (!pctl_desc)
-		return -ENOMEM;
+	int bank = 0, ret;
 
 	info = devm_kzalloc(dev, sizeof(*info), GFP_KERNEL);
 	if (!info)
 		return -ENOMEM;
 
-	info->dev = dev;
-	platform_set_drvdata(pdev, info);
-	ret = aml_pctl_probe_dt(pdev, pctl_desc, info);
-	if (ret)
-		return ret;
+	info->dev  = dev;
+	info->data = of_device_get_match_data(dev);
+	dev_set_drvdata(dev, info);
 
-	pctl_desc->owner	= THIS_MODULE;
-	pctl_desc->pctlops	= &aml_pctrl_ops;
-	pctl_desc->pmxops	= &aml_pmx_ops;
-	pctl_desc->confops	= &aml_pinconf_ops;
-	pctl_desc->name		= dev_name(dev);
-
-	info->pctl = devm_pinctrl_register(dev, pctl_desc, info);
-	if (IS_ERR(info->pctl))
-		return dev_err_probe(dev, PTR_ERR(info->pctl), "Failed pinctrl registration\n");
-
-	for (i = 0; i < info->nbanks; i++) {
-		ret  = gpiochip_add_data(&info->banks[i].gpio_chip, &info->banks[i]);
-		if (ret)
-			return dev_err_probe(dev, ret, "Failed to add gpiochip(%d)!\n", i);
+	/* Count GPIO bank child nodes */
+	for_each_child_of_node(np, child) {
+		if (of_property_read_bool(child, "gpio-controller"))
+			info->nbanks++;
 	}
+
+	if (!info->nbanks)
+		return dev_err_probe(dev, -EINVAL,
+				     "you need at least one gpio bank\n");
+
+	info->banks = devm_kcalloc(dev, info->nbanks,
+				   sizeof(*info->banks), GFP_KERNEL);
+	if (!info->banks)
+		return -ENOMEM;
+
+	for_each_child_of_node(np, child) {
+		if (!of_property_read_bool(child, "gpio-controller"))
+			continue;
+		ret = aml_gpiolib_register_bank(info, bank++, child);
+		if (ret)
+			return ret;
+	}
+
+	info->pctl.dev = dev;
+	info->pctl.ops = &aml_pctrl_ops;
+
+	ret = pinctrl_register(&info->pctl);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed pinctrl registration\n");
 
 	return 0;
 }
@@ -1095,14 +653,12 @@ static const struct of_device_id aml_pctl_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, aml_pctl_of_match);
 
-static struct platform_driver aml_pctl_driver = {
-	.driver = {
-		.name = "amlogic-pinctrl",
-		.of_match_table = aml_pctl_of_match,
-	},
+static struct driver aml_pctl_driver = {
+	.name = "amlogic-pinctrl",
+	.of_match_table = aml_pctl_of_match,
 	.probe = aml_pctl_probe,
 };
-module_platform_driver(aml_pctl_driver);
+core_platform_driver(aml_pctl_driver);
 
 MODULE_AUTHOR("Xianwei Zhao <xianwei.zhao@amlogic.com>");
 MODULE_DESCRIPTION("Pin controller and GPIO driver for Amlogic SoC");

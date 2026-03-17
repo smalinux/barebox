@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-meson-gxbb.c?id=8a74a53ebbe3e81f58cfc6080bf23f1d01e215f4
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Pin controller and GPIO driver for Amlogic Meson GXBB.
@@ -902,13 +903,11 @@ static const struct of_device_id meson_gxbb_pinctrl_dt_match[] = {
 };
 MODULE_DEVICE_TABLE(of, meson_gxbb_pinctrl_dt_match);
 
-static struct platform_driver meson_gxbb_pinctrl_driver = {
+static struct driver meson_gxbb_pinctrl_driver = {
 	.probe		= meson_pinctrl_probe,
-	.driver = {
-		.name	= "meson-gxbb-pinctrl",
-		.of_match_table = meson_gxbb_pinctrl_dt_match,
-	},
+	.name	= "meson-gxbb-pinctrl",
+	.of_match_table = meson_gxbb_pinctrl_dt_match,
 };
-module_platform_driver(meson_gxbb_pinctrl_driver);
+core_platform_driver(meson_gxbb_pinctrl_driver);
 MODULE_DESCRIPTION("Amlogic Meson GXBB pinctrl driver");
 MODULE_LICENSE("GPL v2");

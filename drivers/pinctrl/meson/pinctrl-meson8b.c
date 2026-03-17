@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-meson8b.c?id=8a74a53ebbe3e81f58cfc6080bf23f1d01e215f4
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Pin controller and GPIO driver for Amlogic Meson8b.
@@ -982,11 +983,9 @@ static const struct of_device_id meson8b_pinctrl_dt_match[] = {
 	{ },
 };
 
-static struct platform_driver meson8b_pinctrl_driver = {
+static struct driver meson8b_pinctrl_driver = {
 	.probe		= meson_pinctrl_probe,
-	.driver = {
-		.name	= "meson8b-pinctrl",
-		.of_match_table = meson8b_pinctrl_dt_match,
-	},
+	.name	= "meson8b-pinctrl",
+	.of_match_table = meson8b_pinctrl_dt_match,
 };
-builtin_platform_driver(meson8b_pinctrl_driver);
+core_platform_driver(meson8b_pinctrl_driver);

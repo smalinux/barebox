@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-meson-axg-pmx.c?id=8a74a53ebbe3e81f58cfc6080bf23f1d01e215f4
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
  * Second generation of pinmux driver for Amlogic Meson-AXG SoC.
@@ -19,8 +20,7 @@
  */
 #include <linux/device.h>
 #include <linux/regmap.h>
-#include <linux/pinctrl/pinctrl.h>
-#include <linux/pinctrl/pinmux.h>
+#include <pinctrl.h>
 
 #include "pinctrl-meson.h"
 #include "pinctrl-meson-axg-pmx.h"
@@ -76,7 +76,7 @@ static int meson_axg_pmx_update_function(struct meson_pinctrl *pc,
 	return ret;
 }
 
-static int meson_axg_pmx_set_mux(struct pinctrl_dev *pcdev,
+static int meson_axg_pmx_set_state(struct pinctrl_device *pcdev,
 			unsigned int func_num, unsigned int group_num)
 {
 	int i;
@@ -100,20 +100,20 @@ static int meson_axg_pmx_set_mux(struct pinctrl_dev *pcdev,
 	return 0;
 }
 
-static int meson_axg_pmx_request_gpio(struct pinctrl_dev *pcdev,
-			struct pinctrl_gpio_range *range, unsigned int offset)
-{
-	struct meson_pinctrl *pc = pinctrl_dev_get_drvdata(pcdev);
+//static int meson_axg_pmx_request_gpio(struct pinctrl_device *pcdev,
+//			struct pinctrl_gpio_range *range, unsigned int offset)
+//{
+//	struct meson_pinctrl *pc = pinctrl_dev_get_drvdata(pcdev);
+//
+//	return meson_axg_pmx_update_function(pc, offset, 0);
+//}
 
-	return meson_axg_pmx_update_function(pc, offset, 0);
-}
-
-const struct pinmux_ops meson_axg_pmx_ops = {
-	.set_mux = meson_axg_pmx_set_mux,
-	.get_functions_count = meson_pmx_get_funcs_count,
-	.get_function_name = meson_pmx_get_func_name,
-	.get_function_groups = meson_pmx_get_groups,
-	.gpio_request_enable = meson_axg_pmx_request_gpio,
+struct pinctrl_ops meson_axg_pmx_ops = {
+	.set_state = meson_axg_pmx_set_state,
+	//.get_functions_count = meson_pmx_get_funcs_count,
+	//.get_function_name = meson_pmx_get_func_name,
+	//.get_function_groups = meson_pmx_get_groups,
+	//.gpio_request_enable = meson_axg_pmx_request_gpio,
 };
 EXPORT_SYMBOL_GPL(meson_axg_pmx_ops);
 

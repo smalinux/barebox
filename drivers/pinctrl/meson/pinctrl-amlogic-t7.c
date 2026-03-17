@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-amlogic-t7.c?id=8a74a53ebbe3e81f58cfc6080bf23f1d01e215f4
 // SPDX-License-Identifier: (GPL-2.0-only OR MIT)
 /*
  * Pin controller and GPIO driver for Amlogic T7 SoC.
@@ -1597,14 +1598,12 @@ static const struct of_device_id t7_pinctrl_dt_match[] = {
 };
 MODULE_DEVICE_TABLE(of, t7_pinctrl_dt_match);
 
-static struct platform_driver t7_pinctrl_driver = {
+static struct driver t7_pinctrl_driver = {
 	.probe  = meson_pinctrl_probe,
-	.driver = {
-		.name = "amlogic-t7-pinctrl",
-		.of_match_table = t7_pinctrl_dt_match,
-	},
+	.name = "amlogic-t7-pinctrl",
+	.of_match_table = t7_pinctrl_dt_match,
 };
-module_platform_driver(t7_pinctrl_driver);
+core_platform_driver(t7_pinctrl_driver);
 
 MODULE_AUTHOR("Huqiang Qin <huqiang.qin@amlogic.com>");
 MODULE_DESCRIPTION("Pin controller and GPIO driver for Amlogic T7 SoC");

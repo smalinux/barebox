@@ -1,3 +1,4 @@
+// SPDX-Comment: Origin-URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pinctrl/meson/pinctrl-meson8-pmx.c?id=8a74a53ebbe3e81f58cfc6080bf23f1d01e215f4
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * First generation of pinmux driver for Amlogic Meson SoCs
@@ -12,8 +13,7 @@
  */
 #include <linux/device.h>
 #include <linux/regmap.h>
-#include <linux/pinctrl/pinctrl.h>
-#include <linux/pinctrl/pinmux.h>
+#include <pinctrl.h>
 
 #include "pinctrl-meson.h"
 #include "pinctrl-meson8-pmx.h"
@@ -53,7 +53,8 @@ static void meson8_pmx_disable_other_groups(struct meson_pinctrl *pc,
 	}
 }
 
-static int meson8_pmx_set_mux(struct pinctrl_dev *pcdev, unsigned func_num,
+//int (*set_state)(struct pinctrl_device *, struct device_node *);
+int meson8_pmx_set_state(struct pinctrl_device *pcdev, unsigned func_num,
 			      unsigned group_num)
 {
 	struct meson_pinctrl *pc = pinctrl_dev_get_drvdata(pcdev);
@@ -82,23 +83,23 @@ static int meson8_pmx_set_mux(struct pinctrl_dev *pcdev, unsigned func_num,
 	return ret;
 }
 
-static int meson8_pmx_request_gpio(struct pinctrl_dev *pcdev,
-				   struct pinctrl_gpio_range *range,
-				   unsigned offset)
-{
-	struct meson_pinctrl *pc = pinctrl_dev_get_drvdata(pcdev);
+//static int meson8_pmx_request_gpio(struct pinctrl_device *pcdev,
+//				   struct pinctrl_gpio_range *range,
+//				   unsigned offset)
+//{
+//	struct meson_pinctrl *pc = pinctrl_dev_get_drvdata(pcdev);
+//
+//	meson8_pmx_disable_other_groups(pc, offset, -1);
+//
+//	return 0;
+//}
 
-	meson8_pmx_disable_other_groups(pc, offset, -1);
-
-	return 0;
-}
-
-const struct pinmux_ops meson8_pmx_ops = {
-	.set_mux = meson8_pmx_set_mux,
-	.get_functions_count = meson_pmx_get_funcs_count,
-	.get_function_name = meson_pmx_get_func_name,
-	.get_function_groups = meson_pmx_get_groups,
-	.gpio_request_enable = meson8_pmx_request_gpio,
+struct pinctrl_ops meson8_pmx_ops = {
+	.set_state = meson8_pmx_set_state,
+	//.get_functions_count = meson_pmx_get_funcs_count,
+	//.get_function_name = meson_pmx_get_func_name,
+	//.get_function_groups = meson_pmx_get_groups,
+	//.gpio_request_enable = meson8_pmx_request_gpio,
 };
 EXPORT_SYMBOL_GPL(meson8_pmx_ops);
 MODULE_DESCRIPTION("Amlogic Meson SoCs first generation pinmux driver");
